@@ -1,0 +1,12 @@
+theme = "hackthebox"
+
+[editor]
+auto-format = true
+
+[editor.cursor-shape]
+normal = "block"
+insert = "bar"
+select = "underline"
+
+[keys.normal.space]
+"=" = ":format"

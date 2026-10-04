@@ -1,0 +1,120 @@
+                    TMUX CHEATSHEET
+
+  Navegar:  j/k linha   Ctrl-d/Ctrl-u meia página   g/G início/fim
+  Buscar:   /texto  (n próxima, N anterior)         Sair: q
+  Mouse:    roda do mouse rola esta página
+
+  PREFIX = Ctrl-a
+  ══════════════════════════════════════════════════
+
+  BÁSICO
+  ──────────────────────────────────────────────────
+  Ctrl-a a       Envia Ctrl-a para o programa (ou Ctrl-a Ctrl-a)
+  Ctrl-a r       Recarrega ~/.tmux.conf
+  Ctrl-a ?       Abre esta colinha  (shell: tmux-cheat)
+  Ctrl-a :       Linha de comando do tmux
+  Ctrl-a t       Relógio (q sai)
+  Ctrl-a ~       Mensagens anteriores
+
+
+  PANES (divisões)
+  ──────────────────────────────────────────────────
+  Ctrl-a "       Split vertical   (no diretório atual)
+  Ctrl-a %       Split horizontal (no diretório atual)
+
+  Ctrl-a h/j/k/l Foca pane esq / baixo / cima / dir
+  Ctrl-a H/J/K/L Redimensiona 5 células (repetível: segure Shift)
+  Ctrl-a z       Zoom no pane (de novo para voltar; ícone 󰁌 na barra)
+  Ctrl-a x       Fecha o pane (pede confirmação)
+  Ctrl-a !       Transforma o pane em uma janela
+  Ctrl-a {  }    Troca pane de lugar (anterior / próximo)
+  Ctrl-a Space   Alterna layouts (even, tiled, main...)
+  Ctrl-a q       Mostra números dos panes (aperte o número p/ ir)
+  Ctrl-a o       Próximo pane
+  Ctrl-a ;       Último pane usado
+
+
+  JANELAS (abas)
+  ──────────────────────────────────────────────────
+  Ctrl-a c       Nova janela (diretório atual)
+  Ctrl-a n / p   Próxima / anterior
+  Ctrl-a 1..9    Vai para a janela N (começa em 1)
+  Ctrl-a w       Lista de janelas e sessões (setas, Enter)
+  Ctrl-a ,       Renomear janela
+  Ctrl-a &       Fechar janela
+  Ctrl-a .       Mover janela para outro índice
+
+  As janelas são renumeradas ao fechar.
+
+
+  SESSÕES
+  ──────────────────────────────────────────────────
+  Ctrl-a d       Desanexar (tudo continua rodando)
+  Ctrl-a s       Lista de sessões
+  Ctrl-a $       Renomear sessão
+  Ctrl-a ( / )   Sessão anterior / próxima
+
+  No shell:
+    tmux                    Nova sessão
+    tmux new -s nome        Nova sessão com nome
+    tmux ls                 Lista sessões
+    tmux a                  Reanexa à última
+    tmux a -t nome          Reanexa a "nome"
+    tmux kill-session -t X  Mata a sessão X
+    tmux kill-server        Mata tudo
+
+
+  FLOATING
+  ──────────────────────────────────────────────────
+  Ctrl-a f       Mostra/esconde terminal flutuante persistente
+                 (sessão "float": o conteúdo é mantido)
+
+  Dentro do float:
+    Alt+setas          Move
+    Alt+Shift+setas    Redimensiona
+
+  Ctrl-a e       Popup Helix
+  Ctrl-a g       Popup lazygit
+  Ctrl-a y       Popup Yazi
+  (esses abrem no diretório atual e fecham ao sair)
+
+
+  COPY MODE (como no vim)
+  ──────────────────────────────────────────────────
+  Ctrl-a [       Entra no copy mode (rolar histórico)
+
+  Mover:   h j k l   w b   0 $   g G   Ctrl-u Ctrl-d
+  Buscar:  /texto (para baixo)   ?texto (para cima)   n / N
+  v              Inicia seleção
+  C-v            Seleção retangular
+  y              Copia e sai
+  Enter          Copia para o clipboard (wl-copy) e sai
+  Esc / q        Sai
+
+  Ctrl-a ]       Cola o buffer do tmux
+  Mouse          Arrastar seleciona e copia (wl-copy)
+  Roda           Rola o histórico
+
+
+  MOUSE
+  ──────────────────────────────────────────────────
+  Clique         Foca o pane
+  Arrastar       Redimensiona na borda entre panes
+  Roda           Rola o histórico do pane
+  Clique na aba  Troca de janela (barra inferior)
+
+
+  BARRA DE STATUS
+  ──────────────────────────────────────────────────
+  Esquerda       Sessão (laranja = prefixo ativo)
+  Centro         Janelas (azul = atual, 󰁌 = zoom)
+  Direita        git | CPU | RAM | rede | hora
+
+
+  DICAS
+  ──────────────────────────────────────────────────
+  Ctrl-a :       setw synchronize-panes   (digita em todos os panes)
+  Ctrl-a :       resize-pane -Z           (igual ao zoom)
+  Ctrl-a :       swap-window -t 1         (move janela para o índice 1)
+  Ctrl-a :       move-window -r           (renumera janelas)
+  Ctrl-a :       list-keys                (todos os atalhos)

@@ -1,0 +1,65 @@
+# =========================
+# Alacritty - Full Dev Config
+# =========================
+
+[general]
+# Atualiza automaticamente ao salvar o arquivo
+live_config_reload = true
+
+[window]
+# Decorações completas e padding confortável
+decorations = "full"
+dynamic_padding = true
+startup_mode = "Windowed"
+
+[font]
+# Nerd Font necessária para ícones Starship, Eza e Helix
+normal.family = "JetBrains Mono Nerd Font"
+size = 13.0
+
+[colors]
+# Tema HackTheBox (mesma paleta do tmux e do starship)
+primary.background = "#141d2b"
+primary.foreground = "#a4b1cd"
+
+cursor.text   = "#141d2b"
+cursor.cursor = "#9fef00"
+selection.background = "#313f55"
+selection.text       = "#ffffff"
+
+normal.black   = "#141d2b"
+normal.red     = "#ff3e3e"
+normal.green   = "#9fef00"
+normal.yellow  = "#ffaf00"
+normal.blue    = "#5cb2ff"
+normal.magenta = "#cf8dfb"
+normal.cyan    = "#2ee7b6"
+normal.white   = "#a4b1cd"
+
+bright.black   = "#5c6b86"
+bright.red     = "#ff8484"
+bright.green   = "#c5f467"
+bright.yellow  = "#ffcc5c"
+bright.blue    = "#75beff"
+bright.magenta = "#e0b0ff"
+bright.cyan    = "#5cecc6"
+bright.white   = "#ffffff"
+
+[scrolling]
+# Histórico generoso para Tmux + Helix
+history = 10000
+multiplier = 3
+
+[selection]
+semantic_escape_chars = " ()[]{}'\";:"
+
+#[env]
+# Term correto para Tmux
+#TERM = "alacritty-truecolor"
+
+# =========================
+# Cursor
+# =========================
+[cursor]
+style = "Beam"
+unfocused_hollow = true

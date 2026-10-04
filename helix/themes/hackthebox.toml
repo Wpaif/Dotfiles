@@ -1,0 +1,90 @@
+# Tema HackTheBox (baseado no tema do VS Code). Sem fundo próprio: usa o do terminal.
+
+# --- Sintaxe ---
+"comment"             = { fg = "#5c6b86", modifiers = ["italic"] }
+"keyword"             = "#ff8484"
+"keyword.control"     = "#cf8dfb"
+"keyword.directive"   = "#cf8dfb"
+"keyword.storage"     = "#ff8484"
+"function"            = "#ffcc5c"
+"function.macro"      = "#cf8dfb"
+"function.builtin"    = "#ffcc5c"
+"string"              = "#c5f467"
+"string.regexp"       = "#5cb2ff"
+"string.special"      = "#5cb2ff"
+"constant"            = "#5cb2ff"
+"constant.numeric"    = "#5cb2ff"
+"constant.builtin"    = "#5cb2ff"
+"constant.character.escape" = "#5cb2ff"
+"type"                = "#2ee7b6"
+"type.builtin"        = "#2ee7b6"
+"constructor"         = "#2ee7b6"
+"variable"            = "#a4b1cd"
+"variable.builtin"    = { fg = "#ff8484", modifiers = ["italic"] }
+"variable.parameter"  = "#c5d1eb"
+"variable.other.member" = "#c5d1eb"
+"property"            = "#c5d1eb"
+"attribute"           = "#5cb2ff"
+"label"               = "#cf8dfb"
+"namespace"           = "#2ee7b6"
+"operator"            = "#5cecc6"
+"punctuation"         = "#8392b0"
+"punctuation.delimiter" = "#8392b0"
+"punctuation.bracket" = "#8392b0"
+"tag"                 = "#ff8484"
+"special"             = "#cf8dfb"
+
+# --- Markup ---
+"markup.heading"      = { fg = "#c5f467", modifiers = ["bold"] }
+"markup.bold"         = { modifiers = ["bold"] }
+"markup.italic"       = { modifiers = ["italic"] }
+"markup.strikethrough" = { modifiers = ["crossed_out"] }
+"markup.link.url"     = { fg = "#5cb2ff", modifiers = ["underlined"] }
+"markup.link.text"    = "#cf8dfb"
+"markup.list"         = "#5cecc6"
+"markup.quote"        = { fg = "#8392b0", modifiers = ["italic"] }
+"markup.raw"          = "#cf8dfb"
+
+# --- Diff ---
+"diff.plus"           = "#9fef00"
+"diff.minus"          = "#ff3e3e"
+"diff.delta"          = "#5cb2ff"
+
+# --- Interface ---
+"ui.text"             = "#a4b1cd"
+"ui.text.focus"       = { fg = "#ffffff", bg = "#313f55" }
+"ui.cursor"           = { fg = "#141d2b", bg = "#9fef00" }
+"ui.cursor.match"     = { fg = "#ffffff", bg = "#313f55", modifiers = ["bold"] }
+"ui.cursor.insert"    = { fg = "#141d2b", bg = "#9fef00" }
+"ui.cursor.select"    = { fg = "#141d2b", bg = "#cf8dfb" }
+"ui.selection"        = { bg = "#313f55" }
+"ui.selection.primary" = { bg = "#3b4a63" }
+"ui.cursorline.primary" = { bg = "#1a2332" }
+"ui.linenr"           = "#313f55"
+"ui.linenr.selected"  = { fg = "#ffffff", modifiers = ["bold"] }
+"ui.virtual.whitespace" = "#313f55"
+"ui.virtual.ruler"    = { bg = "#1a2332" }
+"ui.virtual.indent-guide" = "#313f55"
+"ui.virtual.inlay-hint" = { fg = "#5c6b86", modifiers = ["italic"] }
+"ui.statusline"          = { fg = "#a4b1cd", bg = "#1a2332" }
+"ui.statusline.inactive" = { fg = "#5c6b86", bg = "#1a2332" }
+"ui.statusline.normal"   = { fg = "#141d2b", bg = "#9fef00", modifiers = ["bold"] }
+"ui.statusline.insert"   = { fg = "#141d2b", bg = "#5cb2ff", modifiers = ["bold"] }
+"ui.statusline.select"   = { fg = "#141d2b", bg = "#cf8dfb", modifiers = ["bold"] }
+"ui.popup"            = { fg = "#a4b1cd", bg = "#1a2332" }
+"ui.window"           = "#313f55"
+"ui.help"             = { fg = "#a4b1cd", bg = "#1a2332" }
+"ui.menu"             = { fg = "#a4b1cd", bg = "#1a2332" }
+"ui.menu.selected"    = { fg = "#ffffff", bg = "#313f55" }
+"ui.bufferline"       = { fg = "#5c6b86", bg = "#1a2332" }
+"ui.bufferline.active" = { fg = "#9fef00", bg = "#141d2b", modifiers = ["bold"] }
+
+# --- Diagnósticos ---
+"error"               = "#ff3e3e"
+"warning"             = "#ffaf00"
+"info"                = "#5cb2ff"
+"hint"                = "#2ee7b6"
+"diagnostic.error"    = { underline = { color = "#ff3e3e", style = "curl" } }
+"diagnostic.warning"  = { underline = { color = "#ffaf00", style = "curl" } }
+"diagnostic.info"     = { underline = { color = "#5cb2ff", style = "curl" } }
+"diagnostic.hint"     = { underline = { color = "#2ee7b6", style = "curl" } }

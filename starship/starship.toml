@@ -1,0 +1,129 @@
+"$schema" = 'https://starship.rs/config-schema.json'
+
+add_newline = true
+
+format = """
+$os\
+$directory\
+$git_branch\
+$git_status\
+$rust\
+$ruby\
+$nodejs\
+$python\
+$golang\
+$php\
+$java\
+$elixir\
+$lua\
+$c\
+$kotlin\
+$cmd_duration\
+\n$character"""
+
+right_format = "$time"
+
+[os]
+disabled = false
+style = "#9fef00"
+format = '[$symbol ]($style)'
+
+[os.symbols]
+Manjaro = ""
+Arch = ""
+Ubuntu = ""
+Debian = ""
+Fedora = ""
+Linux = ""
+Macos = ""
+Windows = ""
+NixOS = ""
+
+[directory]
+style = "bold #5cb2ff"
+format = "[$path]($style) "
+truncation_length = 3
+truncation_symbol = "…/"
+
+[directory.substitutions]
+"Documents" = "󰈙 "
+"Downloads" = " "
+"Music" = " "
+"Pictures" = " "
+
+[git_branch]
+symbol = ""
+style = "#cf8dfb"
+format = '[$symbol $branch]($style) '
+
+[git_status]
+style = "#ffaf00"
+format = '[($all_status$ahead_behind)]($style) '
+
+[rust]
+symbol = ""
+style = "#dea584"
+format = '[$symbol]($style)[( $version)](#5c6b86) '
+
+[ruby]
+symbol = ""
+style = "#cc342d"
+format = '[$symbol]($style)[( $version)](#5c6b86) '
+
+[nodejs]
+symbol = ""
+style = "#68a063"
+format = '[$symbol]($style)[( $version)](#5c6b86) '
+
+[python]
+symbol = ""
+style = "#4b8bbe"
+format = '[$symbol]($style)[( $version)](#5c6b86) '
+
+[golang]
+symbol = ""
+style = "#00add8"
+format = '[$symbol]($style)[( $version)](#5c6b86) '
+
+[php]
+symbol = ""
+style = "#8993be"
+format = '[$symbol]($style)[( $version)](#5c6b86) '
+
+[java]
+symbol = ""
+style = "#f89820"
+format = '[$symbol]($style)[( $version)](#5c6b86) '
+
+[elixir]
+symbol = ""
+style = "#9b6bb5"
+format = '[$symbol]($style)[( $version)](#5c6b86) '
+
+[lua]
+symbol = ""
+style = "#5b6ee1"
+format = '[$symbol]($style)[( $version)](#5c6b86) '
+
+[c]
+symbol = ""
+style = "#a8b9cc"
+format = '[$symbol]($style)[( $version)](#5c6b86) '
+
+[kotlin]
+symbol = ""
+style = "#7f52ff"
+format = '[$symbol]($style)[( $version)](#5c6b86) '
+
+[cmd_duration]
+min_time = 2000
+format = '[󰔛 $duration](#ffaf00) '
+
+[time]
+disabled = false
+time_format = "%R"
+format = '[$time](#5c6b86)'
+
+[character]
+success_symbol = "[❯](bold #9fef00)"
+error_symbol = "[❯](bold #ff3e3e)"

@@ -1,0 +1,27 @@
+#!/bin/sh
+# tmux-status: segmentos da barra de status. Uso: tmux-status cpu|ram|git <path>|net
+case "$1" in
+cpu)
+    f=/tmp/.tmux-cpu-$(id -u)
+    read -r _ u n s i w q sq _ < /proc/stat
+    tot=$((u + n + s + i + w + q + sq)); idle=$((i + w))
+    [ -f "$f" ] && read -r pt pi < "$f" || { pt=0; pi=0; }
+    echo "$tot $idle" > "$f"
+    dt=$((tot - pt))
+    [ "$dt" -gt 0 ] && echo " $((100 * (dt - (idle - pi)) / dt))%" || echo " --"
+    ;;
+ram)
+    awk '/^MemTotal/{t=$2} /^MemAvailable/{a=$2} END{printf "󰍛 %.1fG\n", (t-a)/1048576}' /proc/meminfo
+    ;;
+git)
+    cd "$2" 2>/dev/null || exit 0
+    b=$(git symbolic-ref --short -q HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null) || exit 0
+    [ -n "$(git status --porcelain 2>/dev/null | head -1)" ] && d="*" || d=""
+    echo " $b$d"
+    ;;
+net)
+    ssid=$(nmcli -t -f active,ssid dev wifi 2>/dev/null | awk -F: '$1=="yes"{print $2; exit}')
+    ip=$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<NF;i++) if($i=="src") print $(i+1)}')
+    [ -n "$ip" ] && echo "󰖩 ${ssid:+$ssid }$ip" || echo "󰖪 offline"
+    ;;
+esac

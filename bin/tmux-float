@@ -1,0 +1,57 @@
+#!/bin/sh
+# tmux-float: popup persistente (sessão "float") que pode ser movido/redimensionado.
+# Uso: tmux-float toggle <client> <session> <path>
+#      tmux-float move|size <dx> <dy> <client_interno>
+S=float
+
+get() { v=$(tmux show -gqv "@float_$1"); echo "${v:-$2}"; }
+clamp() { # valor min max
+    [ "$1" -lt "$2" ] && echo "$2" && return
+    [ "$1" -gt "$3" ] && echo "$3" && return
+    echo "$1"
+}
+
+open() { # client path
+    client=$1
+    tmux has-session -t "$S" 2>/dev/null || {
+        tmux new-session -d -s "$S" -c "${2:-$HOME}"
+        tmux set -t "$S" status off
+    }
+    tmux set -g @float_client "$client"
+    cw=$(tmux display -p -c "$client" '#{client_width}')
+    ch=$(tmux display -p -c "$client" '#{client_height}')
+    w=$(clamp "$(get w 80)" 20 100)
+    h=$(clamp "$(get h 80)" 20 100)
+    pw=$((cw * w / 100)); ph=$((ch * h / 100))
+    x=$(get x $(((cw - pw) / 2))); y=$(get y $(((ch - ph) / 2)))
+    x=$(clamp "$x" 0 $((cw - pw))); y=$(clamp "$y" 0 $((ch - ph)))
+    tmux set -g @float_x "$x"; tmux set -g @float_y "$y"
+    tmux display-popup -c "$client" -E -b rounded -S "fg=#9fef00" \
+        -x "$x" -y "$y" -w "$pw" -h "$ph" \
+        "env -u TMUX tmux attach-session -t $S"
+}
+
+case "$1" in
+toggle)
+    if [ "$3" = "$S" ]; then
+        tmux detach-client -t "$2"
+    else
+        open "$2" "$4"
+    fi
+    ;;
+move|size)
+    dx=$2; dy=$3; inner=$4
+    outer=$(get client "")
+    [ -z "$outer" ] && exit 0
+    if [ "$1" = move ]; then
+        tmux set -g @float_x "$(( $(get x 0) + dx ))"
+        tmux set -g @float_y "$(( $(get y 0) + dy ))"
+    else
+        tmux set -g @float_w "$(( $(get w 80) + dx ))"
+        tmux set -g @float_h "$(( $(get h 80) + dy ))"
+    fi
+    tmux detach-client -t "$inner"
+    sleep 0.05
+    open "$outer"
+    ;;
+esac

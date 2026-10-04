@@ -1,0 +1,4 @@
+#!/bin/sh
+# Mostra a colinha do tmux (usa less se disponível)
+f=~/.tmux-cheatsheet.txt
+command -v less >/dev/null && exec less -R --mouse -i "$f" || exec cat "$f"

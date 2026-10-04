@@ -1,57 +1,80 @@
-export TERMINAL="alacritty"
-export COLORTERM=truecolor
-export CARGO_PATH=/mnt/Kingston256G/.cargo/
-export HELIX_RUNTIME=$HOME/.config/helix
-export JAVA_HOME=/home/wilian/.jdk/jdk-20.0.1
+# =========================
+# Powerlevel10k instant prompt
+# =========================
+# (desativado: usando starship)
+# if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
+#   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
+# fi
 
-# PATH
-export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$CARGO_PATH/bin:$JAVA_HOME/bin:$PATH
+# =========================
+# Oh My Zsh
+# =========================
+export ZSH="$HOME/.oh-my-zsh"
+export PATH="${ASDF_DATA_DIR:-$HOME/.asdf}/shims:$PATH"
 
-export PATH=$PATH:/home/wilian/.spicetif
+ZSH_THEME=""  # prompt via starship
 
-# Use powerline
-USE_POWERLINE="true"
+plugins=(
+  git
+  zsh-autosuggestions
+  zsh-syntax-highlighting
+)
 
-# Source manjaro-zsh-configuration
-#if [[ -e /usr/share/zsh/manjaro-zsh-config ]]; then
-#  source /usr/share/zsh/manjaro-zsh-config
-#fi
-# Use manjaro zsh prompt
-#if [[ -e /usr/share/zsh/manjaro-zsh-prompt ]]; then
-#  source /usr/share/zsh/manjaro-zsh-prompt
-#fi
+source $ZSH/oh-my-zsh.sh
 
-# Uncomment the following line to use case-sensitive completion.
-CASE_SENSITIVE="false"
+export PATH="$HOME/.cargo/bin:$PATH"
 
+# =========================
+# Aliases
+# =========================
+alias ls='eza --icons --group-directories-first --git --color=always'
+alias ll='eza -lh --icons --group-directories-first --git --color=always'
+alias la='eza -lha --icons --group-directories-first --git --color=always'
+alias tree='eza --tree --icons'
+
+alias bat='bat --style=auto --paging=always'
+alias grep='grep --color=auto'
+
+alias lsblk='lsblk -o NAME,SIZE,MOUNTPOINT,TYPE,FSTYPE,RM,RO,LABEL,UUID'
+
+alias lvim='nvim'
+
+alias ..='cd ..'
+alias ...='cd ../..'
+
+alias t='ruby ~/Documents/Github/translate-cli/translater.rb'
+
+# =========================
+# Functions
+# =========================
+vdo_audio() {
+    echo "Criando dispositivos virtuais de áudio..."
+    echo "-> Captura: VDO_Input (Sink)"
+    echo "-> Reprodução: Microfone_VDO (Source)"
+    echo "Pressione CTRL+C para encerrar."
+
+    pw-loopback \
+        -m '[FL FR]' \
+        --capture-props='media.class=Audio/Sink node.name=vdo_input node.description="VDO_Input"' \
+        --playback-props='media.class=Audio/Source node.name=vdo_mic node.description="Microfone_VDO"'
+}
+
+# =========================
+# Powerlevel10k config
+# =========================
+# [[ -f ~/.p10k.zsh ]] && source ~/.p10k.zsh
+
+# zoxide (z projeto) e fzf (Ctrl-r histórico, Ctrl-t arquivos, Alt-c pastas)
+# só ativam se estiverem instalados
+command -v zoxide >/dev/null && eval "$(zoxide init zsh)"
+if command -v fzf >/dev/null; then
+  source <(fzf --zsh)
+  export FZF_DEFAULT_OPTS="--height 40% --layout=reverse --border=rounded --color=bg+:#394260,fg+:#a3aed2,hl:#769ff0,hl+:#7aa2f7,pointer:#769ff0,prompt:#769ff0,border:#394260"
+fi
+
+# Starship (prompt) — deve ficar por último
 eval "$(starship init zsh)"
 
-# Load ZSH plugins
-source /home/wilian/.zs h/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
-source ~/.zsh/zsh-autosuggestions/zsh-autosuggestions.zsh
 
-# Aliases
-alias ls="exa --icons --group-directories-first"
-alias bat="bat --style=auto"
-alias lsblk="lsblk -o NAME,SIZE,MOUNTPOINT,TYPE,FSTYPE,RM,RO,LABEL"
-alias replays="cd /home/wilian/Games/league-of-legends/drive_c/users/wilian/Documents/League\ of\ Legends/Replays/"
-alias books="cd /home/wilian/Documents/Estudos/Books/"
-alias t="ruby /home/wilian/Documents/Github/translate-cli/translater.rb"
-
-
-# ASDF config
-. $HOME/.asdf/asdf.sh
-
-# Save autosuggestions historic
-autoload -Uz compinit && compinit
-HISTFILE=~/.zsh_history
-HISTSIZE=10000
-SAVEHIST=20000
-setopt inc_append_history
-setopt hist_ignore_all_dups
-setopt hist_ignore_space
-setopt hist_ignore_dups
-setopt hist_lex_words
-setopt EXTENDED_HISTORY
-
-
+# Added by Antigravity CLI installer
+export PATH="/home/wilian/.local/bin:$PATH"
