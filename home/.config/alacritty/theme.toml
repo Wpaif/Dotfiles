@@ -1,0 +1,28 @@
+# Gerado por tmux-theme; escolha o tema pelo seletor.
+[colors.primary]
+background = "#141d2b"
+foreground = "#a4b1cd"
+[colors.cursor]
+text = "#141d2b"
+cursor = "#9fef00"
+[colors.selection]
+text = "#a4b1cd"
+background = "#1a2332"
+[colors.normal]
+black = "#141d2b"
+red = "#ff3e3e"
+green = "#9fef00"
+yellow = "#ffaf00"
+blue = "#5cb2ff"
+magenta = "#cf8dfb"
+cyan = "#2ee7b6"
+white = "#a4b1cd"
+[colors.bright]
+black = "#5c6b86"
+red = "#ff8484"
+green = "#9fef00"
+yellow = "#ffcc5c"
+blue = "#75beff"
+magenta = "#e0b0ff"
+cyan = "#5cecc6"
+white = "#ffffff"

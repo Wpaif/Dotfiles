@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Ctrl+Shift+T no Alacritty: abre o seletor em uma janela independente.
+set -euo pipefail
+exec alacritty --title 'Temas do terminal' --class terminal-theme \
+    --option window.dimensions.columns=60 window.dimensions.lines=16 \
+    --command "$HOME/.local/bin/tmux-theme"

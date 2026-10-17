@@ -118,3 +118,9 @@
   Ctrl-a :       swap-window -t 1         (move janela para o índice 1)
   Ctrl-a :       move-window -r           (renumera janelas)
   Ctrl-a :       list-keys                (todos os atalhos)
+
+TEMAS
+  Ctrl-a T       abrir seletor de temas
+  ↑/↓ ou mouse   aplicar prévia
+  Enter          confirmar e salvar
+  Esc            cancelar e restaurar

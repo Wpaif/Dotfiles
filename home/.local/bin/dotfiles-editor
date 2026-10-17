@@ -1,0 +1,6 @@
+#!/bin/sh
+# O nome do executável do Helix varia entre distribuições.
+if command -v helix >/dev/null 2>&1; then exec helix "$@"; fi
+if command -v hx >/dev/null 2>&1; then exec hx "$@"; fi
+printf 'Instale Helix (comando helix ou hx) para abrir o editor.\n' >&2
+exit 127

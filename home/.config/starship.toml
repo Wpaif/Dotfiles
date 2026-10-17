@@ -1,5 +1,7 @@
 "$schema" = 'https://starship.rs/config-schema.json'
 
+# Cores ANSI: acompanham a paleta selecionada no Alacritty.
+# Os ícones das linguagens preservam suas cores originais, independentemente do tema.
 add_newline = true
 
 format = """
@@ -25,7 +27,7 @@ right_format = "$time"
 
 [os]
 disabled = false
-style = "#9fef00"
+style = "green"
 format = '[$symbol ]($style)'
 
 [os.symbols]
@@ -40,7 +42,7 @@ Windows = ""
 NixOS = ""
 
 [directory]
-style = "bold #5cb2ff"
+style = "bold blue"
 format = "[$path]($style) "
 truncation_length = 3
 truncation_symbol = "…/"
@@ -53,77 +55,77 @@ truncation_symbol = "…/"
 
 [git_branch]
 symbol = ""
-style = "#cf8dfb"
+style = "purple"
 format = '[$symbol $branch]($style) '
 
 [git_status]
-style = "#ffaf00"
+style = "yellow"
 format = '[($all_status$ahead_behind)]($style) '
 
 [rust]
 symbol = ""
 style = "#dea584"
-format = '[$symbol]($style)[( $version)](#5c6b86) '
+format = '[$symbol]($style)[( $version)](bright-black) '
 
 [ruby]
 symbol = ""
 style = "#cc342d"
-format = '[$symbol]($style)[( $version)](#5c6b86) '
+format = '[$symbol]($style)[( $version)](bright-black) '
 
 [nodejs]
 symbol = ""
 style = "#68a063"
-format = '[$symbol]($style)[( $version)](#5c6b86) '
+format = '[$symbol]($style)[( $version)](bright-black) '
 
 [python]
 symbol = ""
 style = "#4b8bbe"
-format = '[$symbol]($style)[( $version)](#5c6b86) '
+format = '[$symbol]($style)[( $version)](bright-black) '
 
 [golang]
 symbol = ""
 style = "#00add8"
-format = '[$symbol]($style)[( $version)](#5c6b86) '
+format = '[$symbol]($style)[( $version)](bright-black) '
 
 [php]
 symbol = ""
 style = "#8993be"
-format = '[$symbol]($style)[( $version)](#5c6b86) '
+format = '[$symbol]($style)[( $version)](bright-black) '
 
 [java]
 symbol = ""
 style = "#f89820"
-format = '[$symbol]($style)[( $version)](#5c6b86) '
+format = '[$symbol]($style)[( $version)](bright-black) '
 
 [elixir]
 symbol = ""
 style = "#9b6bb5"
-format = '[$symbol]($style)[( $version)](#5c6b86) '
+format = '[$symbol]($style)[( $version)](bright-black) '
 
 [lua]
 symbol = ""
 style = "#5b6ee1"
-format = '[$symbol]($style)[( $version)](#5c6b86) '
+format = '[$symbol]($style)[( $version)](bright-black) '
 
 [c]
 symbol = ""
 style = "#a8b9cc"
-format = '[$symbol]($style)[( $version)](#5c6b86) '
+format = '[$symbol]($style)[( $version)](bright-black) '
 
 [kotlin]
 symbol = ""
 style = "#7f52ff"
-format = '[$symbol]($style)[( $version)](#5c6b86) '
+format = '[$symbol]($style)[( $version)](bright-black) '
 
 [cmd_duration]
 min_time = 2000
-format = '[󰔛 $duration](#ffaf00) '
+format = '[󰔛 $duration](yellow) '
 
 [time]
 disabled = false
 time_format = "%R"
-format = '[$time](#5c6b86)'
+format = '[$time](bright-black)'
 
 [character]
-success_symbol = "[❯](bold #9fef00)"
-error_symbol = "[❯](bold #ff3e3e)"
+success_symbol = "[❯](bold green)"
+error_symbol = "[❯](bold red)"

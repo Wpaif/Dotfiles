@@ -1,0 +1,360 @@
+#!/usr/bin/env bash
+# Seletor integrado de temas do Alacritty e tmux: prévia imediata e confirmação com Enter.
+set -euo pipefail
+self=$(readlink -f -- "${BASH_SOURCE[0]}")
+config_home=${XDG_CONFIG_HOME:-$HOME/.config}
+state_dir=${XDG_STATE_HOME:-$HOME/.local/state}/tmux
+themes_dir=$config_home/tmux/themes
+alacritty_theme_file=$config_home/alacritty/theme.toml
+# Permite experimentar diretamente no checkout, antes de instalar.
+if [[ ! -d $themes_dir && -d $(dirname "$self")/../../.config/tmux/themes ]]; then
+    themes_dir=$(cd -- "$(dirname "$self")/../../.config/tmux/themes" && pwd)
+fi
+tmux_cmd=(tmux)
+[[ -z ${TMUX_THEME_SOCKET:-} ]] || tmux_cmd+=(-S "$TMUX_THEME_SOCKET")
+tm() { "${tmux_cmd[@]}" "$@"; }
+has_tmux() { command -v tmux >/dev/null && tm list-sessions >/dev/null 2>&1; }
+fail() { printf 'tmux-theme: %s\n' "$*" >&2; exit 1; }
+valid_name() { [[ $1 =~ ^[a-z0-9][a-z0-9_-]*$ ]]; }
+list_themes() {
+    printf 'auto\n'
+    local file name
+    for file in "$themes_dir"/*.theme; do
+        [[ -f $file ]] || continue
+        name=${file##*/}; name=${name%.theme}
+        if valid_name "$name" && [[ $name != auto ]]; then printf '%s\n' "$name"; fi
+    done
+}
+# Somente dados de cor são lidos; arquivos de paleta nunca são executados.
+read_palette() {
+    local file=$1 key value
+    while IFS='=' read -r key value; do
+        key=${key//[[:space:]]/}
+        value=${value//[[:space:]\"\']/}
+        [[ $value =~ ^#[[:xdigit:]]{6}$ ]] || continue
+        case "$key" in
+            background|foreground|surface|muted|border|accent|warning|urgent|color[0-9]|color1[0-5])
+                printf -v "$key" '%s' "$value" ;;
+        esac
+    done < "$file"
+}
+load_palette() {
+    local name=$1 path scheme i
+    local -a defaults=(141d2b ff3e3e 9fef00 ffaf00 5cb2ff cf8dfb 2ee7b6 a4b1cd
+        5c6b86 ff8484 9fef00 ffcc5c 75beff e0b0ff 5cecc6 ffffff)
+    for i in "${!defaults[@]}"; do printf -v "color$i" '#%s' "${defaults[i]}"; done
+    background='#141d2b' foreground='#a4b1cd' surface='#1a2332'
+    muted='#8190aa' border='#313f55' accent='#9fef00'
+    warning='#ffaf00' urgent='#ff3e3e'
+    if [[ $name != auto ]]; then
+        valid_name "$name" && [[ -f $themes_dir/$name.theme ]] || fail "Tema desconhecido: $name"
+        read_palette "$themes_dir/$name.theme"
+        return
+    fi
+    [[ ! -r $themes_dir/catppuccin-mocha.theme ]] || read_palette "$themes_dir/catppuccin-mocha.theme"
+    # Omarchy atual e caminho legado: usa os dados, sem importar seus atalhos.
+    if [[ ${XDG_CURRENT_DESKTOP:-} != *GNOME* ]]; then
+        for path in "$HOME/.local/state/omarchy/current/theme/colors.toml" \
+                    "$config_home/omarchy/current/theme/colors.toml"; do
+            if [[ -r $path ]]; then
+                read_palette "$path"
+                surface=$background border=$muted
+                return
+            fi
+        done
+    fi
+    if [[ ${XDG_CURRENT_DESKTOP:-} == *GNOME* ]] && command -v gsettings >/dev/null; then
+        scheme=$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null || :)
+        if [[ $scheme != *prefer-dark* ]]; then
+            [[ ! -r $themes_dir/catppuccin-latte.theme ]] || read_palette "$themes_dir/catppuccin-latte.theme"
+        fi
+    fi
+}
+# Limpa somente opções visuais; atalhos, processos e status=off são preservados.
+is_theme_option() {
+    case "$1" in
+        status-style|status-left|status-right|status-left-style|status-right-style|status-format|\
+        window-status-separator|window-status-format|window-status-current-format|\
+        window-status-style|window-status-current-style|window-status-last-style|\
+        window-status-bell-style|window-status-activity-style|\
+        pane-border-lines|pane-border-style|pane-active-border-style|\
+        popup-border-lines|popup-border-style|popup-style|message-style|message-command-style|\
+        mode-style|display-panes-colour|display-panes-active-colour|clock-mode-colour|\
+        window-style|window-active-style) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+# Produz comandos tmux para limpar ou registrar APENAS opções locais explícitas.
+# Sem -A, show-options não inclui valores herdados.
+local_theme_commands() {
+    local action=$1 kind target line option previous
+    local -a scope targets
+    for kind in session window pane; do
+        scope=()
+        case "$kind" in
+            session) mapfile -t targets < <(tm list-sessions -F '#{session_id}') ;;
+            window) scope=(-w); mapfile -t targets < <(tm list-windows -a -F '#{window_id}' | sort -u) ;;
+            pane) scope=(-p); mapfile -t targets < <(tm list-panes -a -F '#{pane_id}' | sort -u) ;;
+        esac
+        for target in "${targets[@]}"; do
+            [[ $target =~ ^[\$@%][0-9]+$ ]] || continue
+            previous=
+            while IFS= read -r line; do
+                option=${line%% *}; option=${option%%\[*}
+                is_theme_option "$option" || continue
+                if [[ $action == snapshot ]]; then
+                    printf "set %s -t '%s' %s\n" "${scope[*]}" "$target" "$line"
+                elif [[ $option != "$previous" ]]; then
+                    printf "set -qu %s -t '%s' '%s'\n" "${scope[*]}" "$target" "$option"
+                fi
+                previous=$option
+            done < <(tm show -q "${scope[@]}" -t "$target" 2>/dev/null)
+        done
+    done
+}
+redraw_clients() {
+    local client
+    while IFS= read -r client; do
+        [[ -z $client ]] || tm refresh-client -t "$client" 2>/dev/null || :
+    done < <(tm list-clients -F '#{client_name}')
+}
+# Atualiza os processos já abertos; recarregar o arquivo sozinho pode não bastar.
+# Só envia campos colors.*, preservando fonte, atalhos e demais ajustes em runtime.
+sync_alacritty_runtime() {
+    local file=$1 line section= socket runtime key error_log failed=0
+    local -a options=() sockets=()
+    local -A seen=()
+    command -v alacritty >/dev/null || return 0
+    [[ -r $file ]] || return 0
+    while IFS= read -r line; do
+        if [[ $line =~ ^\[colors\.([a-z_]+)\]$ ]]; then
+            section=${BASH_REMATCH[1]}
+        elif [[ -n $section && $line =~ ^([a-z_]+)[[:space:]]*=[[:space:]]*\"(\#[[:xdigit:]]{6})\" ]]; then
+            key=${BASH_REMATCH[1]}
+            options+=("colors.$section.$key=\"${BASH_REMATCH[2]}\"")
+        fi
+    done < "$file"
+    ((${#options[@]})) || return 0
+    runtime=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
+    [[ -z ${ALACRITTY_SOCKET:-} ]] || sockets+=("$ALACRITTY_SOCKET")
+    for socket in "$runtime"/Alacritty-*.sock "${TMPDIR:-/tmp}"/Alacritty-*.sock; do
+        [[ ! -S $socket ]] || sockets+=("$socket")
+    done
+    for socket in "${sockets[@]}"; do
+        [[ -S $socket && -O $socket && -z ${seen[$socket]:-} ]] || continue
+        seen[$socket]=1
+        if [[ -z ${error_log:-} ]]; then
+            mkdir -p -- "$state_dir"
+            error_log=$state_dir/alacritty-errors.log
+            : > "$error_log"
+        fi
+        # -1 atualiza todas as janelas deste processo, não apenas o seletor.
+        if ! alacritty msg --socket "$socket" config --window-id -1 "${options[@]}" 2>> "$error_log"; then
+            failed=1
+        fi
+    done
+    if (( failed )); then
+        printf 'tmux-theme: cores salvas, mas houve falha ao atualizar uma janela do Alacritty; consulte %s\n' "$error_log" >&2
+    fi
+    return 0
+}
+render_alacritty_palette() {
+    local i variable section index
+    local -a names=(black red green yellow blue magenta cyan white)
+    printf '# Gerado por tmux-theme; escolha o tema pelo seletor.\n'
+    printf '[colors.primary]\nbackground = "%s"\nforeground = "%s"\n' "$background" "$foreground"
+    printf '[colors.cursor]\ntext = "%s"\ncursor = "%s"\n' "$background" "$accent"
+    printf '[colors.selection]\ntext = "%s"\nbackground = "%s"\n' "$foreground" "$surface"
+    for section in normal bright; do
+        printf '[colors.%s]\n' "$section"
+        for i in "${!names[@]}"; do
+            index=$i; [[ $section != bright ]] || index=$((i + 8))
+            variable=color$index
+            printf '%s = "%s"\n' "${names[i]}" "${!variable}"
+        done
+    done
+}
+# O arquivo principal importa apenas este fragmento de cores.
+write_alacritty_palette() {
+    [[ -f $config_home/alacritty/alacritty.toml ]] || return 0
+    local pending
+    pending=$(mktemp "$config_home/alacritty/theme.XXXXXX")
+    render_alacritty_palette > "$pending"
+    if cmp -s "$pending" "$alacritty_theme_file"; then
+        rm -f -- "$pending"
+    else
+        mv -f -- "$pending" "$alacritty_theme_file"
+        touch -- "$config_home/alacritty/alacritty.toml"
+    fi
+    sync_alacritty_runtime "$alacritty_theme_file"
+}
+restore_selector() {
+    if (( ! confirmed )); then
+        if (( selector_tmux )) && has_tmux; then
+            local_theme_commands clear > "$snapshot/clear.conf"
+            tm source-file "$snapshot/clear.conf" || :
+            tm set -gu @theme; tm set -gu @theme_signature
+            tm set -gu status-format
+            tm source-file "$snapshot/before.conf" || :
+            redraw_clients
+        fi
+        if (( alacritty_had_theme )); then
+            local pending
+            pending=$(mktemp "$config_home/alacritty/theme.XXXXXX")
+            cp -- "$snapshot/alacritty.toml" "$pending"
+            mv -f -- "$pending" "$alacritty_theme_file"
+            touch -- "$config_home/alacritty/alacritty.toml"
+            sync_alacritty_runtime "$alacritty_theme_file"
+        else
+            rm -f -- "$alacritty_theme_file"
+        fi
+    fi
+    rm -rf -- "$snapshot"
+}
+apply_theme() {
+    local name=$1 signature commands variable i
+    load_palette "$name"
+    signature="$name:$background:$foreground:$surface:$muted:$border:$accent:$warning:$urgent"
+    for i in {0..15}; do variable=color$i; signature+=":${!variable}"; done
+    if ! has_tmux; then
+        write_alacritty_palette
+        return
+    fi
+    [[ ${2:-} != refresh || $(tm show -gqv @theme_signature) != "$signature" ]] || return 0
+    commands=$(mktemp)
+    local_theme_commands clear > "$commands"
+    cat >> "$commands" <<CONFIG
+set -gu status-format
+set -g @theme '$name'
+set -g @theme_signature '$signature'
+set -g status-style 'bg=$background,fg=$foreground'
+set -g status-left-style 'default'
+set -g status-right-style 'default'
+set -g window-style 'bg=$background,fg=$foreground'
+set -g window-active-style 'bg=$background,fg=$foreground'
+set -g window-status-current-style 'default'
+set -g window-status-last-style 'default'
+set -g window-status-activity-style 'default'
+set -g status-left '#[fg=#{?client_prefix,$warning,$accent},bold] #S #[default] '
+set -g status-right '#[fg=$muted]#(~/.local/bin/tmux-status git #{q:pane_current_path})  #[fg=$foreground]%H:%M #[default]#(~/.local/bin/tmux-theme --refresh)'
+set -g window-status-separator ' '
+set -g window-status-format '#[fg=$muted] #I:#W '
+set -g window-status-current-format '#[fg=$accent,bg=$surface,bold] #I:#W#{?window_zoomed_flag, +,} #[default]'
+set -g window-status-style 'fg=$muted,bg=$background'
+set -g window-status-bell-style 'fg=$urgent,bold'
+set -g pane-border-lines single
+set -g pane-border-style 'fg=$border'
+set -g pane-active-border-style 'fg=$accent'
+set -g popup-border-lines rounded
+set -g popup-border-style 'fg=$accent,bg=$background'
+set -g popup-style 'fg=$foreground,bg=$background'
+set -g message-style 'fg=$foreground,bg=$surface'
+set -g message-command-style 'fg=$accent,bg=$surface'
+set -g mode-style 'fg=$background,bg=$accent'
+set -g display-panes-colour '$muted'
+set -g display-panes-active-colour '$accent'
+set -g clock-mode-colour '$accent'
+CONFIG
+    local result=0
+    tm source-file "$commands" || result=$?
+    rm -f -- "$commands"
+    if (( result == 0 )); then write_alacritty_palette; fi
+    redraw_clients
+    return "$result"
+}
+save_theme() {
+    mkdir -p -- "$state_dir"
+    local pending
+    pending=$(mktemp "$state_dir/theme.XXXXXX")
+    printf '%s\n' "$1" > "$pending"
+    mv -f -- "$pending" "$state_dir/theme"
+}
+restore_saved() {
+    local name=auto
+    [[ ! -r $state_dir/theme ]] || IFS= read -r name < "$state_dir/theme" || :
+    if ! valid_name "$name" || [[ $name != auto && ! -f $themes_dir/$name.theme ]]; then name=auto; fi
+    apply_theme "$name"
+}
+select_theme() {
+    command -v fzf >/dev/null || fail 'Instale fzf para abrir o seletor.'
+    mkdir -p -- "$state_dir"
+    # A paleta do Alacritty é compartilhada; apenas um seletor por usuário.
+    exec 9>"$state_dir/selector.lock"
+    flock -n 9 || fail 'Já existe um seletor de temas aberto.'
+    local selected current option line
+    snapshot=$(mktemp -d)
+    confirmed=0
+    selector_tmux=0
+    alacritty_had_theme=0
+    current=hackthebox
+    if has_tmux; then
+        selector_tmux=1
+        current=$(tm show -gqv @theme || :)
+    elif [[ -r $state_dir/theme ]]; then
+        IFS= read -r current < "$state_dir/theme" || :
+    fi
+    # Um servidor antigo pode ainda apontar para uma paleta removida.
+    if ! valid_name "$current" || [[ $current != auto && ! -f $themes_dir/$current.theme ]]; then
+        current=hackthebox
+    fi
+    # Recria um fragmento ausente com o tema atual antes de iniciar a prévia.
+    # Assim cancelar também restaura as cores enviadas por IPC no primeiro uso.
+    if [[ ! -f $alacritty_theme_file && -f $config_home/alacritty/alacritty.toml ]]; then
+        load_palette "$current"
+        write_alacritty_palette
+    fi
+    if [[ -f $alacritty_theme_file ]]; then
+        cp -- "$alacritty_theme_file" "$snapshot/alacritty.toml"
+        alacritty_had_theme=1
+    fi
+    local options=(status-format status-style status-left status-right status-left-style status-right-style
+        window-style window-active-style window-status-current-style window-status-last-style
+        window-status-activity-style window-status-separator
+        window-status-format window-status-current-format window-status-style
+        window-status-bell-style pane-border-lines pane-border-style pane-active-border-style
+        popup-border-lines popup-border-style popup-style message-style message-command-style
+        mode-style display-panes-colour display-panes-active-colour clock-mode-colour
+        @theme @theme_signature)
+    if (( selector_tmux )); then
+        for option in "${options[@]}"; do
+            while IFS= read -r line; do
+                printf 'set -g %s\n' "$line" >> "$snapshot/before.conf"
+            done < <(tm show -g "$option" 2>/dev/null || :)
+        done
+        local_theme_commands snapshot >> "$snapshot/before.conf"
+    fi
+    # Fechar a janela, Esc e Ctrl-C desfazem a prévia nos dois aplicativos.
+    trap restore_selector EXIT
+    trap 'exit 130' INT TERM HUP
+    export TMUX_THEME_COMMAND=$self
+    export SHELL=/bin/bash
+    # Reordenar coloca o tema atual sob o cursor sem uma prévia de outro tema.
+    if selected=$({
+        if [[ -n $current ]]; then printf '%s\n' "$current"; fi
+        while IFS= read -r option; do [[ $option == "$current" ]] || printf '%s\n' "$option"; done < <(list_themes)
+    } | FZF_DEFAULT_OPTS= FZF_DEFAULT_OPTS_FILE=/dev/null fzf \
+        --layout=reverse --no-sort --no-multi --border=rounded --height=100% \
+        --color='bg:-1,fg:-1,bg+:-1,fg+:-1,hl:4,hl+:12,pointer:5,prompt:5,border:8,header:6,info:8' \
+        --prompt='Tema › ' --header='↑↓ / mouse: prévia · Enter: salvar · Esc: cancelar' \
+        --bind 'focus:execute-silent("$TMUX_THEME_COMMAND" --preview {})' \
+        --bind 'scroll-up:up,scroll-down:down,double-click:ignore' \
+        --bind 'esc:abort' 9>&-); then
+        apply_theme "$selected"
+        save_theme "$selected"
+        confirmed=1
+        if has_tmux; then tm display-message "Tema: $selected"; fi
+    fi
+}
+case ${1:---select} in
+    --list) list_themes ;;
+    --export-alacritty)
+        [[ $# == 2 ]] || fail 'Uso: tmux-theme --export-alacritty NOME'
+        load_palette "$2"; render_alacritty_palette ;;
+    --preview) [[ $# == 2 ]] || fail 'Uso: tmux-theme --preview NOME'; apply_theme "$2" ;;
+    --apply) [[ $# == 2 ]] || fail 'Uso: tmux-theme --apply NOME'; apply_theme "$2"; save_theme "$2" ;;
+    --restore) restore_saved ;;
+    --refresh)
+        if has_tmux && [[ $(tm show -gqv @theme) == auto ]]; then apply_theme auto refresh; fi ;;
+    --select) select_theme ;;
+    *) fail 'Uso: tmux-theme [--list | --apply NOME | --restore]' ;;
+esac

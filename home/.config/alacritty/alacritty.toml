@@ -1,0 +1,44 @@
+# =========================
+# Alacritty - Full Dev Config
+# =========================
+
+[general]
+import = ["theme.toml"]
+# Atualiza automaticamente ao salvar o arquivo
+live_config_reload = true
+
+[window]
+# Decorações completas e padding confortável
+decorations = "full"
+dynamic_padding = true
+startup_mode = "Windowed"
+
+[font]
+# Nerd Font necessária para ícones Starship, Eza e Helix
+normal.family = "JetBrainsMono Nerd Font Mono"
+size = 13.0
+
+[scrolling]
+# Histórico generoso para Tmux + Helix
+history = 10000
+multiplier = 3
+
+[selection]
+semantic_escape_chars = " ()[]{}'\";:"
+
+#[env]
+# Term correto para Tmux
+#TERM = "alacritty-truecolor"
+
+# =========================
+# Cursor
+# =========================
+[cursor]
+style = "Beam"
+unfocused_hollow = true
+
+# Abre o seletor sem depender de uma sessão tmux ou do shell em foco.
+[[keyboard.bindings]]
+key = "T"
+mods = "Control|Shift"
+command = { program = "bash", args = ["-c", 'exec "$HOME/.local/bin/terminal-theme"'] }

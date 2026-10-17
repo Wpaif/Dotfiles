@@ -1,0 +1,27 @@
+# Paleta de cores; dados apenas, sem comandos de shell.
+background=#141d2b
+foreground=#a4b1cd
+surface=#1a2332
+muted=#8190aa
+border=#313f55
+accent=#9fef00
+warning=#ffaf00
+urgent=#ff3e3e
+
+# Cores ANSI originais deste repositório, adaptadas ao Alacritty.
+color0=#141d2b
+color1=#ff3e3e
+color2=#9fef00
+color3=#ffaf00
+color4=#5cb2ff
+color5=#cf8dfb
+color6=#2ee7b6
+color7=#a4b1cd
+color8=#5c6b86
+color9=#ff8484
+color10=#9fef00
+color11=#ffcc5c
+color12=#75beff
+color13=#e0b0ff
+color14=#5cecc6
+color15=#ffffff
