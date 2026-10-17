@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+# Controle por janela; não modifica a opacidade global nem as cores do tema.
+set -euo pipefail
+fail() {
+    printf '\nterminal-opacity: %s\n' "$*" >&2
+    if [[ -t 0 ]]; then printf '\nPressione uma tecla para fechar.\n' >&2; read -rsn1 || :; fi
+    exit 1
+}
+if [[ ${1:-} != --control && ${1:-} != --discover ]]; then
+    socket=${ALACRITTY_SOCKET:-}; window=${ALACRITTY_WINDOW_ID:-}
+    arguments=(--discover "$socket")
+    if [[ -n $socket && $window =~ ^[0-9]+$ ]]; then arguments=(--control "$socket" "$window"); fi
+    exec alacritty --title 'Opacidade do terminal' --class terminal-opacity \
+        --option window.dimensions.columns=56 window.dimensions.lines=9 \
+        --command "$HOME/.local/bin/terminal-opacity" "${arguments[@]}"
+fi
+initial_direction=
+if [[ ${1:-} == --discover ]]; then
+    # Atalhos do Alacritty não herdam o ambiente do shell/PTY original.
+    # Descobre os pares socket/janela nos processos do próprio usuário.
+    preferred_socket=${2:-}
+    declare -A destinations=() labels=()
+    for environ in /proc/[0-9]*/environ; do
+        [[ -O ${environ%/*} && -r $environ ]] || continue
+        candidate_socket=; candidate_window=
+        while IFS= read -r -d '' entry; do
+            case $entry in
+                ALACRITTY_SOCKET=*) candidate_socket=${entry#*=} ;;
+                ALACRITTY_WINDOW_ID=*) candidate_window=${entry#*=} ;;
+            esac
+        done 2>/dev/null < "$environ" || continue
+        [[ -n $candidate_socket && $candidate_window =~ ^[0-9]+$ ]] || continue
+        [[ -S $candidate_socket ]] || continue
+        [[ -z $preferred_socket || $candidate_socket == "$preferred_socket" ]] || continue
+        [[ $candidate_socket != "${ALACRITTY_SOCKET:-}" || $candidate_window != "${ALACRITTY_WINDOW_ID:-}" ]] || continue
+        destination="$candidate_socket|$candidate_window"
+        destinations["$destination"]=1
+        directory=$(readlink "${environ%/*}/cwd" 2>/dev/null || :)
+        labels["$destination"]=${directory##*/}
+    done
+    (( ${#destinations[@]} )) || fail 'Não encontrei a janela original. Execute terminal-opacity no shell da janela desejada.'
+    if (( ${#destinations[@]} == 1 )); then
+        destination=${!destinations[*]}
+    else
+        command -v fzf >/dev/null || fail 'Instale fzf para escolher a janela de destino.'
+        choices=(); targets=(); number=0
+        for destination in "${!destinations[@]}"; do
+            targets+=("$destination")
+            label=${labels[$destination]//$'\n'/ }
+            choices+=("$number  Janela ${destination##*|} · $label")
+            number=$((number + 1))
+        done
+        choice=$(printf '%s\n' "${choices[@]}" | fzf --prompt='Janela de destino > ' \
+            --header='↑↓ escolhe a janela · ←→ inicia a prévia sem Enter' \
+            --expect=left,right) || exit 0
+        case ${choice%%$'\n'*} in left) initial_direction=D ;; right) initial_direction=C ;; esac
+        choice=${choice#*$'\n'}
+        number=${choice%% *}; destination=${targets[$number]}
+    fi
+    set -- --control "${destination%|*}" "${destination##*|}"
+fi
+[[ $# == 3 && $3 =~ ^[0-9]+$ ]] || fail 'Janela de destino inválida.'
+socket=$2; window=$3
+runtime=${XDG_RUNTIME_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}}/terminal-opacity
+mkdir -p -m 700 "$runtime"
+key=$(printf '%s:%s' "$socket" "$window" | sha256sum); key=${key%% *}
+exec 9>"$runtime/$key.lock"
+flock -n 9 || fail 'Já existe um controle aberto para esta janela.'
+state=$runtime/$key
+value=100
+original_transparency=false
+if [[ -f $state ]]; then
+    read -r value < "$state"
+    original_transparency=true
+else
+    config=${XDG_CONFIG_HOME:-$HOME/.config}/alacritty/alacritty.toml
+    if [[ -r $config ]]; then
+        configured=$(awk '/^\[/{window=($0=="[window]")} window && /^[[:space:]]*opacity[[:space:]]*=/ {sub(/#.*/, ""); split($0,a,"="); print int(a[2]*100); exit}' "$config")
+        value=${configured:-100}
+    fi
+fi
+# Alacritty 0.17+ fornece a configuração efetiva, incluindo ajustes por IPC.
+# Em versões anteriores, mantém o fallback de estado/configuração acima.
+if effective=$(timeout 2 alacritty msg --socket "$socket" get-config --window-id "$window" 2>/dev/null); then
+    opacity=$(printf '%s' "$effective" | sed -nE 's/.*"opacity"[[:space:]]*:[[:space:]]*([0-9]+(\.[0-9]+)?).*/\1/p')
+    if [[ $opacity =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+        value=$(awk -v opacity="$opacity" 'BEGIN {printf "%.0f", opacity * 100}')
+    fi
+    transparent=$(printf '%s' "$effective" | sed -nE 's/.*"transparent_background_colors"[[:space:]]*:[[:space:]]*(true|false).*/\1/p')
+    [[ -z $transparent ]] || original_transparency=$transparent
+fi
+[[ $value =~ ^[0-9]+$ && $value -ge 10 && $value -le 100 ]] || value=100
+original=$value
+transparency=true
+changed=0; accepted=0
+apply() {
+    local opacity
+    printf -v opacity '%d.%02d' "$((value / 100))" "$((value % 100))"
+    alacritty msg --socket "$socket" config --window-id "$window" \
+        "window.opacity=$opacity" "colors.transparent_background_colors=$transparency" \
+        || fail 'Não foi possível atualizar a janela do Alacritty.'
+}
+cleanup() {
+    if (( changed && ! accepted )); then
+        value=$original; transparency=$original_transparency; apply || :
+    fi
+    [[ ! -t 1 ]] || printf '\033[?25h'
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM HUP
+[[ ! -t 1 ]] || printf '\033[?25l'
+draw() {
+    printf '\033[H\033[2J\n  󰖨 Opacidade da janela: %s%%\n\n  ← menos    → mais    (passos de 1%%)\n  Prévia imediata na janela selecionada\n\n  Enter mantém nesta janela · Esc cancela\n' "$value"
+}
+draw
+if [[ -n $initial_direction ]]; then
+    if [[ $initial_direction == D ]]; then value=$((value - 1)); else value=$((value + 1)); fi
+    (( value >= 10 )) || value=10
+    (( value <= 100 )) || value=100
+    changed=1; apply; draw
+fi
+while IFS= read -rsn1 key; do
+    case $key in
+        ''|$'\r')
+            printf '%s\n' "$value" > "$state.$$"
+            mv -f "$state.$$" "$state"
+            accepted=1; exit 0 ;;
+        $'\e')
+            IFS= read -rsn1 -t 0.1 sequence || exit 0
+            [[ $sequence == '[' || $sequence == O ]] || continue
+            IFS= read -rsn1 -t 0.1 direction || exit 0
+            case $direction in D) value=$((value - 1));; C) value=$((value + 1));; *) continue;; esac
+            (( value >= 10 )) || value=10
+            (( value <= 100 )) || value=100
+            changed=1; apply; draw ;;
+        $'\003') exit 0 ;;
+    esac
+done

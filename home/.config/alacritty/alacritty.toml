@@ -8,8 +8,9 @@ import = ["theme.toml"]
 live_config_reload = true
 
 [window]
-# Decorações completas e padding confortável
-decorations = "full"
+opacity = 0.92
+# Sem barra de título; Ctrl+Shift+D alterna para novas janelas.
+decorations = "none"
 dynamic_padding = true
 startup_mode = "Windowed"
 
@@ -42,3 +43,17 @@ unfocused_hollow = true
 key = "T"
 mods = "Control|Shift"
 command = { program = "bash", args = ["-c", 'exec "$HOME/.local/bin/terminal-theme"'] }
+
+# Ajusta somente a janela que acionou o atalho, mesmo dentro do tmux.
+[[keyboard.bindings]]
+key = "O"
+mods = "Control|Shift"
+command = { program = "bash", args = ["-c", 'exec "$HOME/.local/bin/terminal-opacity"'] }
+
+[[keyboard.bindings]]
+key = "D"
+mods = "Control|Shift"
+command = { program = "bash", args = ["-c", 'exec "$HOME/.local/bin/terminal-decorations" toggle'] }
+
+[colors]
+transparent_background_colors = true

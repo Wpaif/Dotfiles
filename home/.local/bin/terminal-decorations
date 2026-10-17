@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Alterna a barra de título. Alacritty aplica decorações em novas janelas.
+set -euo pipefail
+fail() { printf 'terminal-decorations: %s\n' "$*" >&2; exit 1; }
+action=${1:-toggle}
+new_window=0
+case $action in toggle|hide|show|status) ;; *) fail 'Use toggle, hide, show ou status; opcional: --new-window.' ;; esac
+[[ $# -le 2 ]] || fail 'Argumentos em excesso.'
+if [[ $# == 2 ]]; then
+    [[ $2 == --new-window ]] || fail 'Opção desconhecida.'
+    new_window=1
+fi
+config=${XDG_CONFIG_HOME:-$HOME/.config}/alacritty/alacritty.toml
+config=$(readlink -f -- "$config")
+[[ -f $config && -w $config ]] || fail 'Configuração do Alacritty ausente ou sem permissão de escrita.'
+state=${XDG_STATE_HOME:-$HOME/.local/state}/alacritty-decorations
+mkdir -p -m 700 "$state"
+exec 9>"$state/lock"
+flock 9
+current=$(awk '
+    /^[[:space:]]*\[/ { window=($0 ~ /^[[:space:]]*\[window\][[:space:]]*(#.*)?$/) }
+    window && /^[[:space:]]*decorations[[:space:]]*=/ {
+        sub(/#.*/, ""); sub(/^[^=]*=[[:space:]]*/, ""); gsub(/["\047[:space:]]/, ""); print tolower($0); exit
+    }' "$config")
+current=${current:-full}
+if [[ $action == status ]]; then printf '%s\n' "$current"; exit 0; fi
+case $action in
+    hide) target=none ;;
+    show) target=full ;;
+    toggle) if [[ $current == none ]]; then target=full; else target=none; fi ;;
+esac
+pending=$(mktemp "${config}.XXXXXX")
+trap 'rm -f -- "$pending"' EXIT
+awk -v mode="$target" '
+    function setting() { print "decorations = \"" mode "\""; written=1 }
+    /^[[:space:]]*\[/ {
+        if (window && !written) setting()
+        window=($0 ~ /^[[:space:]]*\[window\][[:space:]]*(#.*)?$/)
+        if (window) found=1
+    }
+    window && /^[[:space:]]*decorations[[:space:]]*=/ { setting(); next }
+    { print }
+    END {
+        if (!found) { print "\n[window]"; setting() }
+        else if (!written) setting()
+    }' "$config" > "$pending"
+chmod --reference="$config" "$pending"
+cp -p -- "$config" "$state/previous.toml"
+mv -f -- "$pending" "$config"
+printf 'Barra de título: %s. A alteração vale para novas janelas.\n' "$target"
+# Não mantenha o lock aberto durante a vida da nova janela.
+flock -u 9
+exec 9>&-
+if (( new_window )); then
+    exec alacritty --config-file "$config" --option "window.decorations=\"$target\""
+fi

@@ -1,0 +1,180 @@
+#!/usr/bin/env python3
+"""Preset preto fosco: Alacritty 92% + Blur My Shell apenas no Alacritty."""
+import argparse
+import ast
+import datetime
+import glob
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import tempfile
+import tomllib
+import urllib.parse
+import urllib.request
+import zipfile
+
+UUID = 'blur-my-shell@aunetx'
+SCHEMA = 'org.gnome.shell.extensions.blur-my-shell'
+
+
+def run(*args):
+    return subprocess.run(args, check=True, capture_output=True, text=True, timeout=30).stdout.strip()
+
+
+def setting(text, table, key, value):
+    lines = text.splitlines()
+    start = next((i for i, line in enumerate(lines)
+                  if re.fullmatch(r'\s*\[' + re.escape(table) + r'\]\s*(?:#.*)?', line)), None)
+    if start is None:
+        return text.rstrip() + f'\n\n[{table}]\n{key} = {value}\n'
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].lstrip().startswith('[')), len(lines))
+    index = next((i for i in range(start + 1, end) if re.match(r'\s*' + re.escape(key) + r'\s*=', lines[i])), None)
+    if index is None:
+        lines.insert(start + 1, f'{key} = {value}')
+    else:
+        lines[index] = f'{key} = {value}'
+    return '\n'.join(lines) + '\n'
+
+
+def apply_alacritty(backup):
+    config = (Path(os.environ.get('XDG_CONFIG_HOME', str(Path.home() / '.config'))) / 'alacritty/alacritty.toml').resolve()
+    text = config.read_text()
+    tomllib.loads(text)
+    updated = setting(setting(text, 'window', 'opacity', '0.92'), 'colors', 'transparent_background_colors', 'true')
+    tomllib.loads(updated)
+    if updated != text:
+        shutil.copy2(config, backup / 'alacritty.toml')
+        fd, pending = tempfile.mkstemp(prefix='.frosted-', dir=config.parent)
+        try:
+            with os.fdopen(fd, 'w') as file:
+                file.write(updated)
+            shutil.copymode(config, pending)
+            os.replace(pending, config)
+        finally:
+            Path(pending).unlink(missing_ok=True)
+    sockets = set(glob.glob(os.path.join(os.environ.get('XDG_RUNTIME_DIR', '/tmp'), 'Alacritty-*.sock')))
+    sockets.update(glob.glob('/tmp/Alacritty-*.sock'))
+    if os.environ.get('ALACRITTY_SOCKET'):
+        sockets.add(os.environ['ALACRITTY_SOCKET'])
+    applied = 0
+    for socket in sockets:
+        path = Path(socket)
+        if not path.is_socket() or path.stat().st_uid != os.getuid():
+            continue
+        try:
+            run('alacritty', 'msg', '--socket', socket, 'config', '--window-id', '-1',
+                'window.opacity=0.92', 'colors.transparent_background_colors=true')
+            applied += 1
+        except (subprocess.SubprocessError, OSError):
+            print(f'Aviso: não foi possível enviar a opacidade à instância {socket}.')
+    print(f'Configuração do Alacritty salva: 92%, texto nítido; IPC enviado a {applied} instância(s).')
+
+
+def variant(text):
+    text = re.sub(r'^@\S+\s+', '', text)
+    if text == 'true':
+        return True
+    if text == 'false':
+        return False
+    return ast.literal_eval(text)
+
+
+def configure_blur(backup):
+    for command in ('gnome-shell', 'gnome-extensions', 'gsettings', 'gdbus', 'glib-compile-schemas'):
+        if not shutil.which(command):
+            raise RuntimeError(f'Comando necessário: {command}')
+    # Falhar antes de baixar ou alterar extensões se não houver sessão acessível.
+    run('gdbus', 'call', '--session', '--dest', 'org.gnome.Shell', '--object-path', '/org/gnome/Shell',
+        '--method', 'org.freedesktop.DBus.Peer.Ping')
+    version = re.search(r'(\d+)\.\d+', run('gnome-shell', '--version')).group(1)
+    data = Path(os.environ.get('XDG_DATA_HOME', str(Path.home() / '.local/share')))
+    locations = [data] + [Path(path) for path in os.environ.get('XDG_DATA_DIRS', '/usr/local/share:/usr/share').split(':')]
+    extension = next((path / 'gnome-shell/extensions' / UUID for path in locations
+                      if (path / 'gnome-shell/extensions' / UUID / 'metadata.json').is_file()), None)
+    fresh = extension is None
+    if fresh:
+        query = urllib.parse.urlencode({'uuid': UUID, 'shell_version': version})
+        with urllib.request.urlopen('https://extensions.gnome.org/extension-info/?' + query, timeout=30) as response:
+            info = json.load(response)
+        if not info.get('download_url'):
+            raise RuntimeError(f'O catálogo oficial não forneceu um pacote compatível com GNOME {version}.')
+        url = urllib.parse.urljoin('https://extensions.gnome.org', info['download_url'])
+        if urllib.parse.urlparse(url).scheme != 'https' or urllib.parse.urlparse(url).hostname != 'extensions.gnome.org':
+            raise RuntimeError('URL de download não pertence ao catálogo oficial do GNOME.')
+        with tempfile.TemporaryDirectory(prefix='blur-my-shell-') as directory:
+            archive = Path(directory) / 'extension.zip'
+            with urllib.request.urlopen(url, timeout=30) as response:
+                archive.write_bytes(response.read(20 * 1024 * 1024))
+            with zipfile.ZipFile(archive) as bundle:
+                metadata = json.loads(bundle.read('metadata.json'))
+            if metadata.get('uuid') != UUID or version not in metadata.get('shell-version', []):
+                raise RuntimeError(f'Extensão incompatível com GNOME {version}.')
+            run('gnome-extensions', 'install', str(archive))
+        extension = data / 'gnome-shell/extensions' / UUID
+    metadata = json.loads((extension / 'metadata.json').read_text())
+    if version not in metadata.get('shell-version', []):
+        raise RuntimeError(f'Atualize o Blur My Shell para uma versão compatível com GNOME {version}.')
+    schemas = extension / 'schemas'
+    if not (schemas / 'gschemas.compiled').exists():
+        run('glib-compile-schemas', str(schemas))
+
+    def get(schema, key):
+        return run('gsettings', '--schemadir', str(schemas), 'get', schema, key)
+
+    previous = {}
+
+    def set_value(schema, key, value):
+        previous[f'{schema} {key}'] = get(schema, key)
+        (backup / 'gnome-settings.json').write_text(json.dumps(previous, indent=2) + '\n')
+        run('gsettings', '--schemadir', str(schemas), 'set', schema, key, value)
+        if variant(get(schema, key)) != variant(value):
+            raise RuntimeError(f'GNOME não confirmou a gravação: {schema} {key}.')
+
+    # Instalação nova: desativa os efeitos fora dos aplicativos.
+    if fresh:
+        for schema in run('gsettings', '--schemadir', str(schemas), 'list-schemas').splitlines():
+            if schema.startswith(SCHEMA + '.') and schema != SCHEMA + '.applications':
+                if 'blur' in run('gsettings', '--schemadir', str(schemas), 'list-keys', schema).splitlines():
+                    set_value(schema, 'blur', 'false')
+    for key, value in {
+        'enable-all': 'false', 'whitelist': "['Alacritty', 'org.alacritty.Alacritty']",
+        'static-blur': 'false', 'customize': 'true', 'sigma': '24', 'brightness': '0.85',
+        'opacity': '255', 'dynamic-opacity': 'false', 'corner-radius': '0', 'blur': 'true',
+    }.items():
+        set_value(SCHEMA + '.applications', key, value)
+    enabled = variant(get('org.gnome.shell', 'enabled-extensions'))
+    if UUID not in enabled:
+        set_value('org.gnome.shell', 'enabled-extensions', repr(enabled + [UUID]))
+    try:
+        run('gnome-extensions', 'enable', UUID)
+        run('gnome-extensions', 'info', UUID)
+        # A saída localizada não serve para decidir se a extensão foi carregada.
+        print('Blur My Shell configurado. Confira seu estado com: gnome-extensions info ' + UUID)
+    except subprocess.SubprocessError:
+        print('Configuração salva. O GNOME precisa reconhecer a extensão: saia e entre na sessão, depois execute este comando novamente.')
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--alacritty-only', action='store_true', help='configura 92%% sem instalar ou ativar desfoque')
+    args = parser.parse_args()
+    state = Path(os.environ.get('XDG_STATE_HOME', str(Path.home() / '.local/state')))
+    backup = state / 'dotfiles/backups' / (datetime.datetime.now().strftime('%Y%m%d-%H%M%S-frosted-glass-') + str(os.getpid()))
+    backup.mkdir(parents=True, mode=0o700)
+    print(f'Backup: {backup}')
+    if not args.alacritty_only:
+        configure_blur(backup)
+    apply_alacritty(backup)
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except subprocess.CalledProcessError as error:
+        detail = error.stderr.strip() or error.stdout.strip() or str(error)
+        raise SystemExit(f'terminal-frosted-glass: {detail}\nExecute no terminal normal da sua sessão GNOME, sem sudo.')
+    except (OSError, RuntimeError, subprocess.SubprocessError, ValueError, KeyError, zipfile.BadZipFile) as error:
+        raise SystemExit(f'terminal-frosted-glass: {error}\nExecute no terminal normal da sua sessão GNOME, sem sudo.')
