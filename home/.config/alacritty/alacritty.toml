@@ -55,5 +55,16 @@ key = "D"
 mods = "Control|Shift"
 command = { program = "bash", args = ["-c", 'exec "$HOME/.local/bin/terminal-decorations" toggle'] }
 
+# Ctrl + tecla + abre uma nova janela (também quando + exige Shift).
+[[keyboard.bindings]]
+key = "+"
+mods = "Control"
+action = "CreateNewWindow"
+
+[[keyboard.bindings]]
+key = "+"
+mods = "Control|Shift"
+action = "CreateNewWindow"
+
 [colors]
 transparent_background_colors = true
