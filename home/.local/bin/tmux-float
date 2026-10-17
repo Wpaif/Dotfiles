@@ -26,8 +26,9 @@ open() { # client path
     x=$(get x $(((cw - pw) / 2))); y=$(get y $(((ch - ph) / 2)))
     x=$(clamp "$x" 0 $((cw - pw))); y=$(clamp "$y" 0 $((ch - ph)))
     tmux set -g @float_x "$x"; tmux set -g @float_y "$y"
+    # Guardamos o topo; display-popup -y recebe a borda inferior.
     tmux display-popup -c "$client" -E -b rounded \
-        -x "$x" -y "$y" -w "$pw" -h "$ph" \
+        -x "$x" -y "$((y + ph))" -w "$pw" -h "$ph" \
         "env -u TMUX tmux attach-session -t $S"
 }
 
