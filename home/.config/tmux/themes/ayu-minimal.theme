@@ -1,0 +1,29 @@
+# Ayu Minimal: paleta do LazyVim, com barra e divisórias discretas.
+# Fonte: https://github.com/alacritty/alacritty-theme/blob/master/themes/ayu_dark.toml
+# Fundo, superfície e borda adaptados para os blocos e divisórias do tmux.
+layout=minimal
+background=#07090d
+foreground=#b3b1ad
+surface=#10141c
+muted=#686868
+border=#27303c
+accent=#ffb454
+warning=#f9af4f
+urgent=#ff6670
+
+color0=#01060e
+color1=#ff4d5a
+color2=#9ccc42
+color3=#f9af4f
+color4=#53bdfa
+color5=#fae994
+color6=#90e1c6
+color7=#c7c7c7
+color8=#686868
+color9=#ff6670
+color10=#b4e64d
+color11=#ffb454
+color12=#59c2ff
+color13=#ffee99
+color14=#95e6cb
+color15=#ffffff

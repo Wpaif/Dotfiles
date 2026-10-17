@@ -31,6 +31,10 @@ read_palette() {
     while IFS='=' read -r key value; do
         key=${key//[[:space:]]/}
         value=${value//[[:space:]\"\']/}
+        if [[ $key == layout && $value == minimal ]]; then
+            theme_layout=minimal
+            continue
+        fi
         [[ $value =~ ^#[[:xdigit:]]{6}$ ]] || continue
         case "$key" in
             background|foreground|surface|muted|border|accent|warning|urgent|color[0-9]|color1[0-5])
@@ -40,6 +44,7 @@ read_palette() {
 }
 load_palette() {
     local name=$1 path scheme i
+    theme_layout=default
     local -a defaults=(141d2b ff3e3e 9fef00 ffaf00 5cb2ff cf8dfb 2ee7b6 a4b1cd
         5c6b86 ff8484 9fef00 ffcc5c 75beff e0b0ff 5cecc6 ffffff)
     for i in "${!defaults[@]}"; do printf -v "color$i" '#%s' "${defaults[i]}"; done
@@ -77,7 +82,7 @@ is_theme_option() {
         window-status-separator|window-status-format|window-status-current-format|\
         window-status-style|window-status-current-style|window-status-last-style|\
         window-status-bell-style|window-status-activity-style|\
-        pane-border-lines|pane-border-style|pane-active-border-style|\
+        pane-border-lines|pane-border-indicators|pane-border-status|pane-border-style|pane-active-border-style|\
         popup-border-lines|popup-border-style|popup-style|message-style|message-command-style|\
         mode-style|display-panes-colour|display-panes-active-colour|clock-mode-colour|\
         window-style|window-active-style) return 0 ;;
@@ -214,7 +219,7 @@ restore_selector() {
 apply_theme() {
     local name=$1 signature commands variable i
     load_palette "$name"
-    signature="$name:$background:$foreground:$surface:$muted:$border:$accent:$warning:$urgent"
+    signature="$name:$theme_layout:$background:$foreground:$surface:$muted:$border:$accent:$warning:$urgent"
     for i in {0..15}; do variable=color$i; signature+=":${!variable}"; done
     if ! has_tmux; then
         write_alacritty_palette
@@ -235,16 +240,18 @@ set -g window-active-style 'bg=$background,fg=$foreground'
 set -g window-status-current-style 'default'
 set -g window-status-last-style 'default'
 set -g window-status-activity-style 'default'
-set -g status-left '#[fg=#{?client_prefix,$warning,$accent},bold] #S #[default] '
-set -g status-right '#[fg=$muted]#(~/.local/bin/tmux-status git #{q:pane_current_path})  #[fg=$foreground]%H:%M #[default]#(~/.local/bin/tmux-theme --refresh)'
-set -g window-status-separator ' '
+set -g status-left '#[fg=$background,bg=#{?client_prefix,$warning,$accent},bold] 󰆍 #S #[default] '
+set -g status-right '#[fg=$muted,bg=$surface] 󰒋 #h #[fg=$border]│ #[fg=$foreground]#(~/.local/bin/tmux-status cpu) #[default] #[fg=#{?#{||:#{client_prefix},#{||:#{pane_in_mode},#{window_zoomed_flag}}},$background,$muted},bg=#{?#{||:#{client_prefix},#{||:#{pane_in_mode},#{window_zoomed_flag}}},$warning,$surface}] #{?client_prefix,󰘳 PREFIX ,}#{?pane_in_mode,󰆏 COPY ,}#{?window_zoomed_flag,󰊓 ZOOM ,}#{?#{||:#{client_prefix},#{||:#{pane_in_mode},#{window_zoomed_flag}}},,󰘳 NORMAL }#[default] #[fg=$accent,bg=$surface] #(~/.local/bin/tmux-status battery) #[fg=$border]│ #[fg=$foreground]󰥔 %H:%M #[default]#(~/.local/bin/tmux-theme --refresh)'
+set -g window-status-separator '#[fg=$border,bg=$background]│#[default]'
 set -g window-status-format '#[fg=$muted] #I:#W '
 set -g window-status-current-format '#[fg=$accent,bg=$surface,bold] #I:#W#{?window_zoomed_flag, +,} #[default]'
 set -g window-status-style 'fg=$muted,bg=$background'
 set -g window-status-bell-style 'fg=$urgent,bold'
 set -g pane-border-lines single
-set -g pane-border-style 'fg=$border'
-set -g pane-active-border-style 'fg=$accent'
+set -g pane-border-indicators off
+set -g pane-border-status off
+set -g pane-border-style 'fg=$border,bg=$background'
+set -g pane-active-border-style 'fg=$accent,bg=$background'
 set -g popup-border-lines rounded
 set -g popup-border-style 'fg=$accent,bg=$background'
 set -g popup-style 'fg=$foreground,bg=$background'
@@ -255,6 +262,18 @@ set -g display-panes-colour '$muted'
 set -g display-panes-active-colour '$accent'
 set -g clock-mode-colour '$accent'
 CONFIG
+    if [[ $theme_layout == minimal ]]; then
+        cat >> "$commands" <<CONFIG
+set -g status-left '#[fg=#{?client_prefix,$warning,$accent},bg=$surface] 󰆍 #S #[default] '
+set -g status-right '#[fg=$muted,bg=$background]󰒋 #h #[fg=$border]│ #[fg=$foreground]#(~/.local/bin/tmux-status cpu) #[fg=$border]│ #[fg=$warning]#{?client_prefix,󰘳 PREFIX ,}#{?pane_in_mode,󰆏 COPY ,}#{?window_zoomed_flag,󰊓 ZOOM ,}#{?#{||:#{client_prefix},#{||:#{pane_in_mode},#{window_zoomed_flag}}},,#[fg=$muted]󰘳 NORMAL }#[fg=$muted]#(~/.local/bin/tmux-status battery) #[fg=$border]│ #[fg=$foreground,bg=$surface] 󰥔 %H:%M #[default]#(~/.local/bin/tmux-theme --refresh)'
+set -g window-status-format '#[fg=$muted,bg=$background] #I:#W #[default]'
+set -g window-status-current-format '#[fg=$accent,bg=$surface] #I:#W#{?window_zoomed_flag, 󰊓,} #[default]'
+set -g pane-active-border-style 'fg=$border,bg=$background'
+set -g popup-border-lines single
+set -g popup-border-style 'fg=$border,bg=$surface'
+set -g popup-style 'fg=$foreground,bg=$surface'
+CONFIG
+    fi
     local result=0
     tm source-file "$commands" || result=$?
     rm -f -- "$commands"
@@ -311,7 +330,7 @@ select_theme() {
         window-style window-active-style window-status-current-style window-status-last-style
         window-status-activity-style window-status-separator
         window-status-format window-status-current-format window-status-style
-        window-status-bell-style pane-border-lines pane-border-style pane-active-border-style
+        window-status-bell-style pane-border-lines pane-border-indicators pane-border-status pane-border-style pane-active-border-style
         popup-border-lines popup-border-style popup-style message-style message-command-style
         mode-style display-panes-colour display-panes-active-colour clock-mode-colour
         @theme @theme_signature)

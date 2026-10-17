@@ -33,7 +33,7 @@ valid_options = set("""status-format status-style status-left status-right
 status-left-style status-right-style window-style window-active-style
 window-status-current-style window-status-last-style window-status-activity-style
 window-status-separator window-status-format window-status-current-format
-window-status-style window-status-bell-style pane-border-lines pane-border-style
+window-status-style window-status-bell-style pane-border-lines pane-border-indicators pane-border-status pane-border-style
 pane-active-border-style popup-border-lines popup-border-style popup-style
 message-style message-command-style mode-style display-panes-colour
 display-panes-active-colour clock-mode-colour status automatic-rename""".split())
@@ -319,7 +319,8 @@ class ThemeSelectorTests(unittest.TestCase):
         bindings = config['keyboard']['bindings']
         self.assertTrue(any(b['key'] == 'T' and b['mods'] == 'Control|Shift' for b in bindings))
         self.assertIn('theme.toml', config['general']['import'])
-        self.assertNotIn('colors', config)
+        for section in ('primary', 'normal', 'bright'):
+            self.assertNotIn(section, config.get('colors', {}))
 
     def test_applying_theme_has_no_invalid_tmux_options(self):
         result = self.run_cli('--apply', 'dracula', check=False)
@@ -329,14 +330,30 @@ class ThemeSelectorTests(unittest.TestCase):
 
     def test_installed_theme_catalog_and_all_palettes(self):
         expected = {'auto', 'hackthebox', 'catppuccin-mocha', 'catppuccin-latte',
-                    'dracula', 'nord', 'tokyo-night', 'gruvbox'}
+                    'dracula', 'nord', 'tokyo-night', 'gruvbox', 'ayu-dark', 'ayu-minimal'}
         self.assertEqual(set(self.run_cli('--list').stdout.splitlines()), expected)
         backgrounds = {'hackthebox': '#141d2b', 'catppuccin-mocha': '#1e1e2e',
                        'catppuccin-latte': '#eff1f5', 'dracula': '#282a36',
-                       'nord': '#2e3440', 'tokyo-night': '#1a1b26', 'gruvbox': '#282828'}
+                       'nord': '#2e3440', 'tokyo-night': '#1a1b26', 'gruvbox': '#282828',
+                       'ayu-dark': '#07090d', 'ayu-minimal': '#07090d'}
         for name, background in backgrounds.items():
             self.run_cli('--preview', name)
             self.assertIn(background, self.state()['status-style'])
+
+    def test_ayu_minimal_has_discreet_layout_and_preserves_status_information(self):
+        self.run_cli('--apply', 'ayu-minimal')
+        state = self.state()
+        self.assertIn('bg=#10141c', state['status-left'])
+        self.assertEqual(state['popup-border-lines'], 'single')
+        self.assertIn('#27303c', state['pane-active-border-style'])
+        for field in ('#h', 'tmux-status cpu', 'tmux-status battery', '%H:%M',
+                      'client_prefix', 'pane_in_mode', 'window_zoomed_flag'):
+            self.assertIn(field, state['status-right'])
+        self.assertEqual(self.run_cli('--export-alacritty', 'ayu-minimal').stdout,
+                         self.run_cli('--export-alacritty', 'ayu-dark').stdout)
+        self.run_cli('--apply', 'ayu-dark')
+        self.assertEqual(self.state()['popup-border-lines'], 'rounded')
+        self.assertIn('#ffb454', self.state()['pane-active-border-style'])
 
     def seed_local_overrides(self):
         state = self.state()
@@ -346,7 +363,9 @@ class ThemeSelectorTests(unittest.TestCase):
             'session:$0': {'status-style': 'fg=red', 'status-left': 'OLD',
                            'status-format[0]': 'OLD FORMAT', 'status': 'off'},
             'session:$1': {'status-right-style': 'fg=red'},
-            'window:@0': {'pane-border-style': 'fg=red', 'window-status-format': 'OLD'},
+            'window:@0': {'pane-border-style': 'fg=red', 'pane-border-lines': 'heavy',
+                          'pane-border-indicators': 'arrows', 'pane-border-status': 'top',
+                          'window-status-format': 'OLD'},
             'window:@1': {'window-active-style': 'bg=red', 'automatic-rename': 'off'},
             'pane:%0': {'window-style': 'bg=red'},
         }
