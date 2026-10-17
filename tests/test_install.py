@@ -29,9 +29,67 @@ class InstallerTests(unittest.TestCase):
                               cwd='/tmp', env=self.env, capture_output=True, text=True, check=check)
 
     def test_dry_run_creates_nothing(self):
-        result = self.install('--dry-run', '--bootstrap')
+        result = self.install('--dry-run', '--bootstrap', '--frosted-glass')
         self.assertFalse(self.target.exists())
         self.assertIn('SIMULAÇÃO', result.stdout)
+        self.assertIn('vidro fosco', result.stdout)
+
+    def test_new_install_defaults_to_current_visual_and_includes_all_controls(self):
+        self.install()
+        self.assertEqual((self.target / '.local/state/tmux/theme').read_text().strip(), 'ayu-minimal')
+        config = tomllib.loads((self.target / '.config/alacritty/alacritty.toml').read_text())
+        self.assertEqual(config['window']['opacity'], 0.92)
+        self.assertEqual(config['window']['decorations'], 'none')
+        bindings = {binding['key']: binding for binding in config['keyboard']['bindings']}
+        self.assertTrue({'T', 'O', 'D'} <= bindings.keys())
+        self.assertNotIn('--new-window', bindings['D']['command']['args'][-1])
+        palette = tomllib.loads((self.target / '.config/alacritty/theme.toml').read_text())['colors']
+        self.assertEqual(palette['primary']['background'], '#07090d')
+        self.assertEqual(palette['normal']['green'], '#9ccc42')
+        for helper in ('terminal-theme', 'terminal-opacity', 'terminal-decorations', 'terminal-frosted-glass'):
+            self.assertTrue(os.access(self.target / '.local/bin' / helper, os.X_OK))
+
+    def test_frosted_glass_rejects_alternate_home_without_writing(self):
+        result = self.install('--frosted-glass', check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('--target', result.stderr)
+        self.assertFalse(self.target.exists())
+
+    def test_frosted_glass_requires_gnome_before_installing(self):
+        env = dict(self.env, HOME=str(self.target), XDG_CURRENT_DESKTOP='KDE')
+        result = subprocess.run(['bash', str(INSTALL), '--frosted-glass'], env=env,
+                                capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('GNOME', result.stderr)
+        self.assertFalse(self.target.exists())
+
+    def test_frosted_glass_is_applied_after_installing_files_with_correct_xdg_paths(self):
+        import sys
+        commands = self.base / 'profile-bin'
+        commands.mkdir()
+        python = commands / 'python3'
+        python.write_text('''#!/bin/sh
+if [ "$1" = -c ]; then exec "$REAL_PYTHON" "$@"; fi
+test -f "$XDG_CONFIG_HOME/alacritty/alacritty.toml" || exit 1
+test -f "$XDG_CONFIG_HOME/nvim/lua/plugins/visual.lua" || exit 1
+printf '%s\\n' "$1" "$XDG_CONFIG_HOME" "$XDG_STATE_HOME" "$XDG_DATA_HOME" > "$PROFILE_LOG"
+''')
+        python.chmod(0o755)
+        env = dict(self.env, HOME=str(self.target), XDG_CURRENT_DESKTOP='GNOME',
+                   XDG_CONFIG_HOME=str(self.target / '.config'), XDG_STATE_HOME=str(self.target / '.local/state'),
+                   XDG_DATA_HOME=str(self.target / '.local/share'), REAL_PYTHON=sys.executable,
+                   PROFILE_LOG=str(self.base / 'profile.log'), PATH=f'{commands}:{self.env["PATH"]}')
+        # Missing GNOME binaries are transport fixtures; no desktop calls occur.
+        for name in ('gnome-shell', 'gnome-extensions', 'gsettings', 'gdbus', 'glib-compile-schemas'):
+            binary = commands / name
+            binary.write_text('#!/bin/sh\nexit 1\n')
+            binary.chmod(0o755)
+        result = subprocess.run(['bash', str(INSTALL), '--frosted-glass'], env=env,
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        log = (self.base / 'profile.log').read_text().splitlines()
+        self.assertEqual(log, [str(self.target / '.local/bin/terminal-frosted-glass'),
+                               env['XDG_CONFIG_HOME'], env['XDG_STATE_HOME'], env['XDG_DATA_HOME']])
 
     def test_fresh_install_includes_configs_helpers_and_selected_palette(self):
         self.install('--theme', 'gruvbox')
@@ -51,11 +109,16 @@ class InstallerTests(unittest.TestCase):
         untouched = self.target / '.config/outro-app/config'
         untouched.parent.mkdir(parents=True)
         untouched.write_text('preservar')
+        keymaps = self.target / '.config/nvim/lua/config/keymaps.lua'
+        keymaps.parent.mkdir(parents=True)
+        keymaps.write_text('-- meus atalhos\n')
         self.install()
         backups = list((self.target / '.local/state/dotfiles/backups').glob('*/home/.zshrc'))
         self.assertEqual(len(backups), 1)
         self.assertEqual(backups[0].read_text(), 'minha configuração anterior\n')
         self.assertEqual(untouched.read_text(), 'preservar')
+        self.assertEqual(keymaps.read_text(), '-- meus atalhos\n')
+        self.assertTrue((self.target / '.config/nvim/lua/plugins/visual.lua').is_file())
 
     def test_rerunning_keeps_saved_theme_and_makes_no_extra_backup(self):
         self.install('--theme', 'gruvbox')

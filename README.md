@@ -1,6 +1,8 @@
 # Dotfiles
 
-Tema comum: HackTheBox (verde `#9fef00`, fundo `#141d2b`) no Alacritty, tmux, starship e Helix.
+Dotfiles com temas integrados para Alacritty, tmux e Starship. Novas instalações
+usam Ayu Minimal, com fundo quase preto; HackTheBox continua disponível.
+O LazyVim recebe o visual Ayu Dark, e o Helix mantém sua configuração existente.
 
 ## Organização
 
@@ -18,7 +20,8 @@ Use `ls -la home` para visualizar os arquivos ocultos.
 | `home/.config/alacritty/` | `~/.config/alacritty/` |
 | `home/.config/tmux/themes/` | `~/.config/tmux/themes/` |
 | `home/.config/helix/` | `~/.config/helix/` |
-| `home/.local/bin/` | `~/.local/bin/` (scripts do tmux) |
+| `home/.config/nvim/` | Overlay visual sobre um LazyVim já instalado |
+| `home/.local/bin/` | `~/.local/bin/` (temas, opacidade, moldura, vidro fosco e helpers do tmux) |
 
 ## Instalação em um Linux novo
 
@@ -26,8 +29,25 @@ Depois de clonar ou copiar este repositório, entre na pasta `Dotfiles` e execut
 
 ```sh
 ./install.sh --dry-run
-./install.sh --bootstrap --theme gruvbox
+./install.sh --bootstrap --theme ayu-minimal
 ```
+
+Para reproduzir também o vidro preto fosco no GNOME, execute na sessão gráfica
+da própria conta, sem sudo:
+
+```sh
+./install.sh --dry-run --bootstrap --theme ayu-minimal --frosted-glass
+./install.sh --bootstrap --theme ayu-minimal --frosted-glass
+```
+
+`--frosted-glass` executa o preset depois de instalar os arquivos. Requer
+Python >= 3.11 e as ferramentas do GNOME já disponíveis; pode baixar a extensão
+Blur My Shell do catálogo oficial, habilitá-la e aplicar 92% de opacidade às
+instâncias do Alacritty. Esse passo exige acesso à sessão GNOME e à rede quando
+a extensão ainda não está instalada. Não faz parte de `--bootstrap` sozinho.
+Não pode ser usado com `--target` na instalação real; a simulação apenas mostra
+o plano. Se o preset falhar, os dotfiles já copiados continuam instalados e o
+erro é informado; execute `terminal-frosted-glass` novamente na sessão normal.
 
 `--bootstrap` instala os pacotes disponíveis no gerenciador do sistema,
 Oh My Zsh, zsh-autosuggestions, zsh-syntax-highlighting e JetBrainsMono Nerd
@@ -45,7 +65,8 @@ Para instalar somente os arquivos, sem rede ou pacotes:
 O instalador funciona a partir de qualquer diretório. Ele copia Bash, Zsh,
 tmux, Alacritty, Starship, Helix e os scripts auxiliares, sem depender de
 manter o checkout no mesmo lugar. Os temas e **Ctrl+Shift+T** já ficam
-configurados. HackTheBox é o padrão de uma conta nova; uma escolha salva
+configurados, junto com **Ctrl+Shift+O** para opacidade e **Ctrl+Shift+D** para
+a preferência da barra de título. Ayu Minimal é o padrão de uma conta nova; uma escolha salva
 é mantida nas reinstalações. Use `--theme NOME` para escolher outro tema.
 Os ícones das linguagens continuam com as cores originais.
 
@@ -73,6 +94,7 @@ As opções também podem ser usadas separadamente:
 ./install.sh --packages      # pacman / apt-get / dnf
 ./install.sh --shell-tools   # Oh My Zsh e plugins
 ./install.sh --font          # Nerd Font na conta do usuário
+./install.sh --frosted-glass # desfoque no GNOME da sessão atual
 ./install.sh --help
 ```
 
@@ -133,12 +155,21 @@ com `tmux-theme` no terminal ou com **Ctrl-a T** dentro do tmux:
 - **Esc / Ctrl-C:** restaura o visual anterior sem salvar.
 
 As paletas usam as cores dos projetos originais, adaptadas ao layout deste
-painel: fundo sólido, bordas finas, sessão e janelas à esquerda, Git e hora
-à direita. Não é necessário instalar os plugins completos dos temas.
+painel: fundo sólido, bordas finas, sessão e janelas à esquerda; hostname,
+CPU, modo do tmux, bateria e relógio à direita, com ícones Nerd Font.
+Os campos são agrupados em blocos com o fundo de superfície da paleta;
+a sessão usa a cor de destaque e modos ativos usam a cor de aviso.
+O modo indica NORMAL, PREFIX, COPY e ZOOM (estados simultâneos aparecem juntos).
+A CPU usa amostras de `/proc/stat`, atualizadas no intervalo de 5 segundos;
+a primeira amostra mostra `--`. A bateria vem de `/sys/class/power_supply`,
+indica carregamento e fica oculta em máquinas sem bateria. Com várias baterias,
+exibe a média dos percentuais. Não é necessário instalar plugins dos temas.
 
 | Tema no seletor | Referência |
 |---|---|
 | `hackthebox` | Paleta original deste repositório |
+| `ayu-dark` | [Ayu Dark](https://github.com/alacritty/alacritty-theme/blob/master/themes/ayu_dark.toml) — fundo quase preto `#07090d`, destaques âmbar |
+| `ayu-minimal` | Mesma paleta Ayu personalizada do LazyVim, com barra discreta, divisórias cinza e popups de borda simples |
 | `catppuccin-mocha` | [Catppuccin Mocha](https://github.com/catppuccin/tmux) — escuro, tons pastel |
 | `catppuccin-latte` | [Catppuccin Latte](https://github.com/catppuccin/tmux) — claro |
 | `dracula` | [Dracula](https://github.com/dracula/tmux) — cinza escuro e roxo |
@@ -162,6 +193,8 @@ Para adicionar uma paleta, crie `~/.config/tmux/themes/nome.theme` usando
 um dos arquivos existentes como modelo. Nomes aceitam letras minúsculas,
 números, hífen e sublinhado; as cores usam `#RRGGBB`. Os arquivos são
 lidos como dados, nunca executados. `auto` é um nome reservado.
+O campo opcional `layout=minimal` ativa o layout discreto usado pelo
+`ayu-minimal`; sem ele, o tema usa os blocos padrão da barra.
 
 A escolha vale para todas as sessões do servidor tmux; só é permitido um
 seletor aberto por usuário, pois o arquivo de cores do Alacritty é compartilhado. O seletor sincroniza as cores do tmux e do Alacritty. Fonte e opacidade
@@ -209,6 +242,87 @@ novas sessões recebem a escolha ao carregar a configuração do tmux.
 Sem tmux aberto, Auto consulta o tema do ambiente ao abrir o seletor ou
 reaplicar a escolha. A atualização periódica continua disponível enquanto
 há tmux com a barra de status ativa.
+
+## Visual do LazyVim
+
+O colorscheme local **`ayu-dark`** acompanha a paleta personalizada do terminal:
+fundo `#07090d`, superfícies `#10141c`, âmbar `#ffb454`, verde `#9ccc42` e
+vermelho `#ff4d5a`. A interface usa divisórias finas, janelas flutuantes com
+borda simples, abas discretas e uma barra de status sem separadores grandes.
+A proposta minimalista toma o [Lackluster](https://github.com/slugbyte/lackluster.nvim)
+como referência; não é uma cópia da imagem do Reddit, que não pôde ser acessada.
+
+A camada usa os plugins que o LazyVim já tem. Não modifica atalhos, LSP,
+formatação, conclusão ou fontes de dados das barras; as alterações nos plugins
+se limitam à apresentação. Não adiciona uma dependência de tema externa.
+
+O instalador copia apenas `colors/ayu-dark.lua`, `lua/dotfiles/ayu.lua` e
+`lua/plugins/visual.lua`, com backup dos arquivos existentes. Os demais
+arquivos de `~/.config/nvim` são preservados. É necessário ter LazyVim instalado;
+o overlay não instala nem substitui sua configuração base. Reinicie o Neovim
+para carregar todo o visual. `:colorscheme ayu-dark` aplica apenas o tema em
+uma instância já aberta. O tema do editor é fixo em Ayu; o seletor do terminal
+continua independente.
+
+## Barra de título do Alacritty
+
+O padrão de novas instalações é `window.decorations = "none"`, sem barra de
+título nem botões. **Ctrl+Shift+D** executa `terminal-decorations toggle`:
+alterna a preferência entre `none` e `full`, sem abrir nem fechar janelas.
+A alteração vale na próxima abertura do Alacritty. No Alacritty 0.17, a criação da janela
+aplica as decorações; alterar a configuração por IPC não redesenha essa moldura.
+
+```sh
+terminal-decorations hide --new-window  # abrir sem barra de título
+terminal-decorations show --new-window  # abrir com barra de título
+terminal-decorations toggle             # mudar somente a preferência
+terminal-decorations status
+```
+
+O script preserva as demais configurações e salva a versão anterior em
+`${XDG_STATE_HOME:-~/.local/state}/alacritty-decorations/previous.toml`.
+
+## Opacidade por janela
+
+Para o aspecto de **vidro preto fosco**, use Ayu Minimal e execute, no terminal
+normal da sua sessão GNOME, sem sudo:
+
+```sh
+terminal-frosted-glass
+```
+
+O comando requer Python >= 3.11, GLib e as ferramentas do GNOME. Se necessário,
+baixa o Blur My Shell do catálogo oficial `extensions.gnome.org`, conferindo a
+compatibilidade com a versão do GNOME antes de instalar. Configura desfoque
+dinâmico moderado (sigma 24), limitado ao Alacritty, e mantém a opacidade do
+ator da extensão em 255 para preservar o texto. Em instalações novas da
+extensão, desativa seus efeitos no painel, dock e demais componentes.
+Salva a opacidade do Alacritty em 92% e habilita a transparência dos fundos
+coloridos; também tenta enviar esses ajustes por IPC às instâncias abertas.
+As cores do tema não são alteradas pelo comando.
+
+Se o GNOME não reconhecer a extensão recém-instalada, será necessário sair e
+entrar na sessão e executar novamente o comando. As configurações anteriores
+ficam em `~/.local/state/dotfiles/backups/`, respeitando `XDG_STATE_HOME`.
+`terminal-frosted-glass --alacritty-only` configura somente a transparência,
+sem baixar extensões ou ativar desfoque. O efeito fosco só estará ativo após
+a extensão estar instalada, carregada e habilitada na sessão GNOME.
+
+No Alacritty, **Ctrl+Shift+O** abre `terminal-opacity` em uma janela de controle.
+**←** reduz a opacidade e **→** aumenta, em passos de 1%, de 10% a 100%.
+A prévia modifica somente a janela que acionou o atalho, inclusive com tmux
+aberto. Quando o atalho não fornece o identificador da janela, o controle
+descobre as janelas pelos processos do usuário: escolhe automaticamente se
+houver uma só, ou pede a seleção pelo fzf se houver várias. Na lista, ↑/↓ escolhe o destino e ←/→ inicia a prévia sem precisar de Enter.
+A própria janela do controle é excluída. **Enter** mantém o ajuste nessa janela; **Esc**, Ctrl-C ou fechar o
+controle restaura o valor anterior. Não altera a configuração global nem
+a paleta; novas janelas continuam com a opacidade configurada no Alacritty.
+Cada seta aplica a prévia por IPC imediatamente, incluindo os fundos coloridos
+do tmux. Enter apenas mantém o ajuste. No Alacritty 0.17+, o controle consulta
+a opacidade efetiva da janela; em versões anteriores usa o último ajuste
+registrado ou a configuração. Esc também restaura a opção de transparência
+dos fundos coloridos. O controle lembra os valores aplicados por ele
+enquanto a janela estiver em uso.
 
 ## Cores do prompt e das buscas
 

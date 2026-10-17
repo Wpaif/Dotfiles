@@ -8,6 +8,7 @@ dry_run=0
 packages=0
 shell_tools=0
 font=0
+frosted_glass=0
 selected_theme=
 stage=
 backup_dir=
@@ -24,13 +25,15 @@ Não instala pacotes, não acessa a rede e não troca o shell de login.
   --packages         Instala pacotes via pacman, apt-get ou dnf (pede sudo)
   --shell-tools      Clona Oh My Zsh e seus dois plugins oficiais
   --font             Instala JetBrainsMono Nerd Font Mono (v3.5.1, SHA-256)
+  --frosted-glass    Instala/configura desfoque no GNOME da sessão atual
   --theme NOME       Tema inicial; mantém a escolha existente quando omitido
   --target CAMINHO   Home de destino (isolado dos XDG_* da conta atual)
   -h, --help         Mostra esta ajuda
 
 Exemplos:
   ./install.sh --dry-run
-  ./install.sh --bootstrap --theme gruvbox
+  ./install.sh --bootstrap --theme ayu-minimal
+  ./install.sh --bootstrap --theme ayu-minimal --frosted-glass
   ./install.sh --target /tmp/nova-home --theme hackthebox
 HELP
 }
@@ -41,6 +44,7 @@ while (($#)); do
         --packages) packages=1 ;;
         --shell-tools) shell_tools=1 ;;
         --font) font=1 ;;
+        --frosted-glass) frosted_glass=1 ;;
         --theme|--target)
             (($# >= 2)) || fail "Falta valor para $1"
             if [[ $1 == --theme ]]; then selected_theme=$2
@@ -70,6 +74,15 @@ bin_dir=$target_home/.local/bin
 for directory in "$config_dir" "$state_dir" "$data_dir"; do
     [[ $directory == /* ]] || fail 'XDG_CONFIG_HOME, XDG_STATE_HOME e XDG_DATA_HOME devem ser absolutos.'
 done
+if (( frosted_glass && ! dry_run )); then
+    (( ! target_explicit )) || fail '--frosted-glass não pode ser usado com --target; execute na conta da sessão GNOME atual.'
+    desktop=${XDG_CURRENT_DESKTOP:-}
+    [[ ${desktop^^} == *GNOME* ]] || fail '--frosted-glass requer uma sessão GNOME ativa.'
+    for tool in python3 gnome-shell gnome-extensions gsettings gdbus glib-compile-schemas; do
+        command -v "$tool" >/dev/null || fail "Instale $tool antes de usar --frosted-glass."
+    done
+    python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 11))' || fail '--frosted-glass requer Python >= 3.11.'
+fi
 if [[ -z $selected_theme && -r $state_dir/tmux/theme ]]; then
     IFS= read -r selected_theme < "$state_dir/tmux/theme" || :
     if [[ ! $selected_theme =~ ^[a-z0-9][a-z0-9_-]*$ ]] ||
@@ -77,7 +90,7 @@ if [[ -z $selected_theme && -r $state_dir/tmux/theme ]]; then
         selected_theme=
     fi
 fi
-selected_theme=${selected_theme:-hackthebox}
+selected_theme=${selected_theme:-ayu-minimal}
 [[ $selected_theme =~ ^[a-z0-9][a-z0-9_-]*$ ]] || fail "Tema inválido: $selected_theme"
 [[ $selected_theme == auto || -f $repo_dir/home/.config/tmux/themes/$selected_theme.theme ]] || fail "Tema desconhecido: $selected_theme"
 # Nunca instalar através de um link de diretório pai sem fazer backup dele.
@@ -99,6 +112,10 @@ done
 for name in alacritty helix tmux/themes starship.toml; do
     add "home/.config/$name" "$config_dir/$name" "config/$name"
 done
+# Overlay visual do LazyVim: nunca substituir a configuração nvim inteira.
+for name in colors/ayu-dark.lua lua/dotfiles/ayu.lua lua/plugins/visual.lua; do
+    add "home/.config/nvim/$name" "$config_dir/nvim/$name" "config/nvim/$name"
+done
 for source in "$repo_dir/home/.local/bin/"*; do
     [[ -f $source ]] || continue
     name=${source##*/}
@@ -114,6 +131,7 @@ if (( dry_run )); then
     (( ! packages )) || printf '  pacotes: detectar pacman/apt-get/dnf; instalar os disponíveis via sudo\n'
     (( ! shell_tools )) || printf '  git clone: Oh My Zsh, zsh-autosuggestions, zsh-syntax-highlighting\n'
     (( ! font )) || printf '  fonte: JetBrainsMono Nerd Font v3.5.1, validar SHA-256 e atualizar fontconfig\n'
+    (( ! frosted_glass )) || printf '  vidro fosco: executar terminal-frosted-glass na sessão GNOME atual; pode baixar e habilitar Blur My Shell\n'
     exit 0
 fi
 stage=$(mktemp -d)
@@ -232,6 +250,11 @@ for i in "${!sources[@]}"; do
 done
 printf '\nDotfiles: %s componentes instalados, %s já estavam atualizados.\nTema: %s\n' "$installed" "$unchanged" "$selected_theme"
 [[ ! -d $backup_dir ]] || printf 'Backup: %s\n' "$backup_dir"
+if (( frosted_glass )); then
+    printf '\nConfigurando vidro fosco na sessão GNOME atual...\n'
+    env XDG_CONFIG_HOME="$config_dir" XDG_STATE_HOME="$state_dir" XDG_DATA_HOME="$data_dir" \
+        "$bin_dir/terminal-frosted-glass"
+fi
 missing=()
 for tool in zsh tmux alacritty fzf starship zoxide eza flock less; do
     command -v "$tool" >/dev/null || missing+=("$tool")
@@ -255,4 +278,5 @@ for tool in alacritty tmux fzf; do
     fi
 done
 printf 'Abra um novo terminal. Atalho dos temas: Ctrl+Shift+T no Alacritty.\n'
+printf 'Opacidade: Ctrl+Shift+O. Preferência da barra de título: Ctrl+Shift+D (vale na próxima abertura).\n'
 printf 'Para usar Zsh como shell de login, altere-o nas preferências da sua conta.\n'
