@@ -127,8 +127,64 @@ python3 -B -m unittest discover -s tests -p test_install.py -k manjaro -v
 Ele não muda seu shell de login, não instala runtimes de linguagens e não
 recarrega sessões tmux abertas. Abra um novo terminal após instalar. Mise,
 asdf, Neovim e PipeWire são opcionais; integrações só são ativadas quando
-disponíveis. Para o atalho pessoal `t`, defina `TRANSLATE_CLI_SCRIPT` com o
-caminho do projeto translate-cli.
+disponíveis.
+
+## Comportamento e visual separados
+
+O instalador separa o que muda **como** você trabalha (zsh, tmux, helix,
+starship, scripts `tmux-*`) do que muda **a aparência** (Alacritty, Ayu no
+Neovim, scripts `terminal-*`).
+
+```sh
+./install.sh --no-visual   # só comportamento
+./install.sh --visual      # comportamento + visual
+```
+
+Sem nenhuma das opções, o visual é instalado, exceto no **Omarchy**
+(detectado por `omarchy-theme-set` ou `~/.config/omarchy`): lá o sistema de
+temas dele controla as cores do terminal, do Neovim e do desktop, e os
+dotfiles não as sobrescrevem. `--frosted-glass` exige o visual.
+
+### Escolher componentes
+
+Cada parte pode ser omitida com `--no-COMPONENTE`: `bash`, `zsh`, `tmux`,
+`helix`, `starship` e `visual`. Exemplo para o Omarchy, mantendo só zsh e helix:
+
+```sh
+./install.sh --no-bash --no-tmux --no-starship --no-visual
+```
+
+Para escolher num menu, sem lembrar as opções:
+
+```sh
+./install.sh -i
+```
+
+O menu (Bash puro, sem dependências) lista os componentes e os extras
+(pacotes, Oh My Zsh, fonte, vidro fosco) já marcados com o padrão detectado.
+Digite os números para alternar (`a` marca tudo, `n` desmarca, Enter segue,
+`q` sai), escolha o tema inicial e confirme o resumo. Ele só monta as mesmas
+opções acima e lê a entrada padrão; com a entrada encerrada, nada é instalado.
+
+`--no-tmux` pula toda a configuração do tmux (`.tmux.conf`, cheatsheet,
+atalhos `tmux-*` e a barra). Com o visual ligado, continuam instalados o
+`tmux-theme` e os temas, que o Alacritty usa para trocar de tema (`Ctrl+Shift+T`).
+
+## Aplicativos
+
+`install-packages.sh` instala os aplicativos de uso diário em Arch, Manjaro e
+Omarchy: Firefox, Helix, Bitwarden, qpwgraph, qBittorrent, Celluloid, Discord,
+Steam e Telegram (repositórios oficiais), mais Spotify e spotatui (AUR, via
+`yay`). Só instala o que falta.
+
+```sh
+./install-packages.sh --dry-run   # mostra o plano
+./install-packages.sh             # instala
+./install-packages.sh --no-aur    # sem Spotify e spotatui
+```
+
+O Steam exige `[multilib]` habilitado em `/etc/pacman.conf`; se estiver
+desabilitado, ele é ignorado com um aviso. A lista fica no topo do script.
 
 ## Dependências
 
@@ -281,6 +337,70 @@ terminal-decorations status
 
 O script preserva as demais configurações e salva a versão anterior em
 `${XDG_STATE_HOME:-~/.local/state}/alacritty-decorations/previous.toml`.
+
+### Mover a janela sem barra no GNOME
+
+Para mover a janela segurando **Ctrl + botão esquerdo do mouse** e arrastando,
+execute no terminal da sua sessão GNOME, sem sudo:
+
+```sh
+gsettings set org.gnome.desktop.wm.preferences mouse-button-modifier '<Control>'
+```
+
+A preferência é persistente e vale para todas as janelas do GNOME, inclusive
+o Alacritty sem decorações. Pode interferir em Ctrl+clique nos aplicativos.
+O instalador dos dotfiles não altera essa preferência automaticamente.
+
+Para consultar a configuração:
+
+```sh
+gsettings get org.gnome.desktop.wm.preferences mouse-button-modifier
+```
+
+Para voltar ao valor anterior desta sessão (**Super/Windows + arraste**):
+
+```sh
+gsettings set org.gnome.desktop.wm.preferences mouse-button-modifier '<Super>'
+```
+
+### Cantos arredondados no GNOME
+
+Execute na sessão GNOME, sem sudo:
+
+```sh
+terminal-rounded-corners
+```
+
+Antes de instalar os dotfiles, também é possível executar diretamente:
+
+```sh
+~/Documentos/Github/Dotfiles/home/.local/bin/terminal-rounded-corners
+```
+
+O comando baixa a versão compatível da extensão
+[Rounded Window Corners Reborn](https://extensions.gnome.org/extension/7048/rounded-window-corners-reborn/)
+do catálogo oficial do GNOME e configura um raio de **12 px**, limitado ao
+Alacritty. Janelas maximizadas ou em tela cheia permanecem com cantos retos.
+Mantém as configurações de decorações e transparência do Alacritty.
+Se a extensão recém-instalada não for reconhecida, saia e entre na sessão
+GNOME e execute novamente o comando. O instalador comum dos dotfiles apenas
+copia o comando; não instala nem ativa a extensão automaticamente.
+
+As preferências anteriores da extensão ficam em
+`~/.local/state/dotfiles/backups/*-rounded-corners-*/rounded-corners.dconf`,
+respeitando `XDG_STATE_HOME`. Para desativar o efeito:
+
+```sh
+gnome-extensions disable rounded-window-corners@fxgn
+```
+
+Para restaurar as preferências, primeiro desative a extensão e então use o
+arquivo de backup informado pelo comando:
+
+```sh
+dconf reset -f /org/gnome/shell/extensions/rounded-window-corners-reborn/
+dconf load /org/gnome/shell/extensions/rounded-window-corners-reborn/ < /caminho/do/backup/rounded-corners.dconf
+```
 
 ## Opacidade por janela
 
