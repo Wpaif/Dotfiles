@@ -34,6 +34,76 @@ class InstallerTests(unittest.TestCase):
         self.assertIn('SIMULAÇÃO', result.stdout)
         self.assertIn('vidro fosco', result.stdout)
 
+    def test_no_visual_installs_behavior_only(self):
+        self.install('--no-visual')
+        self.assertTrue((self.target / '.zshrc').is_file())
+        self.assertTrue((self.target / '.tmux.conf').is_file())
+        self.assertTrue((self.target / '.config/helix/config.toml').is_file())
+        self.assertFalse((self.target / '.config/alacritty').exists())
+        self.assertFalse((self.target / '.config/nvim').exists())
+        self.assertFalse(list((self.target / '.local/bin').glob('terminal-*')))
+        self.assertTrue((self.target / '.local/bin/tmux-theme').is_file())
+
+    def test_no_tmux_skips_tmux_configuration(self):
+        self.install('--no-tmux', '--no-visual')
+        self.assertTrue((self.target / '.zshrc').is_file())
+        self.assertFalse((self.target / '.tmux.conf').exists())
+        self.assertFalse((self.target / '.tmux-cheatsheet.txt').exists())
+        self.assertFalse((self.target / '.config/tmux').exists())
+        self.assertFalse((self.target / '.local/state/tmux').exists())
+        self.assertFalse(list((self.target / '.local/bin').glob('tmux-*')))
+
+    def test_no_tmux_keeps_theme_switching_when_visual_is_on(self):
+        self.install('--no-tmux', '--visual')
+        self.assertFalse((self.target / '.tmux.conf').exists())
+        self.assertTrue((self.target / '.config/tmux/themes/ayu-minimal.theme').is_file())
+        self.assertTrue((self.target / '.local/bin/tmux-theme').is_file())
+        self.assertTrue((self.target / '.local/bin/terminal-theme').is_file())
+        self.assertFalse((self.target / '.local/bin/tmux-float').exists())
+
+    def test_component_flags_skip_individual_files(self):
+        self.install('--no-bash', '--no-helix', '--no-starship', '--no-tmux', '--no-visual')
+        self.assertTrue((self.target / '.zshrc').is_file())
+        self.assertFalse((self.target / '.bashrc').exists())
+        self.assertFalse((self.target / '.config/helix').exists())
+        self.assertFalse((self.target / '.config/starship.toml').exists())
+        self.assertFalse((self.target / '.local/bin/dotfiles-editor').exists())
+
+    def test_unknown_component_is_rejected(self):
+        result = self.install('--no-foo', check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Componente desconhecido: foo', result.stderr)
+
+    def run_interactive(self, answers, *args):
+        return subprocess.run(['bash', str(INSTALL), '--target', str(self.target), '-i', *args],
+                              cwd='/tmp', env=self.env, input=answers, capture_output=True, text=True)
+
+    def test_interactive_menu_toggles_components(self):
+        # Desmarca bash(1), zsh(2), tmux(3) e visual(6); mantém o tema; confirma.
+        result = self.run_interactive('1 2 3 6\n\n\n')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse((self.target / '.bashrc').exists())
+        self.assertFalse((self.target / '.zshrc').exists())
+        self.assertFalse((self.target / '.tmux.conf').exists())
+        self.assertFalse((self.target / '.config/alacritty').exists())
+        self.assertTrue((self.target / '.config/helix/config.toml').is_file())
+        self.assertTrue((self.target / '.config/starship.toml').is_file())
+
+    def test_interactive_cancel_installs_nothing(self):
+        result = self.run_interactive('q\n')
+        self.assertEqual(result.returncode, 0)
+        self.assertFalse(self.target.exists())
+
+    def test_interactive_eof_installs_nothing(self):
+        result = self.run_interactive('')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.target.exists())
+
+    def test_no_visual_rejects_frosted_glass(self):
+        result = self.install('--no-visual', '--frosted-glass', check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('--frosted-glass requer o visual', result.stderr)
+
     def test_new_install_defaults_to_current_visual_and_includes_all_controls(self):
         self.install()
         self.assertEqual((self.target / '.local/state/tmux/theme').read_text().strip(), 'ayu-minimal')

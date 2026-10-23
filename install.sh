@@ -9,6 +9,11 @@ packages=0
 shell_tools=0
 font=0
 frosted_glass=0
+interactive=0
+# Componentes selecionáveis; "visual" aceita auto (omitido no Omarchy).
+components=(bash zsh tmux helix starship visual)
+declare -A use=([bash]=on [zsh]=on [tmux]=on [helix]=on [starship]=on [visual]=auto)
+is_component() { local c; for c in "${components[@]}"; do [[ $c == "$1" ]] && return 0; done; return 1; }
 selected_theme=
 stage=
 backup_dir=
@@ -18,6 +23,7 @@ usage() {
 Uso: ./install.sh [opções]
 
 Sem opções: copia os dotfiles, faz backup das diferenças e verifica dependências.
+No Omarchy o visual é omitido automaticamente (o tema dele controla as cores).
 Não instala pacotes, não acessa a rede e não troca o shell de login.
 
   --dry-run          Mostra o plano sem escrever arquivos nem acessar a rede
@@ -26,6 +32,10 @@ Não instala pacotes, não acessa a rede e não troca o shell de login.
   --shell-tools      Clona Oh My Zsh e seus dois plugins oficiais
   --font             Instala JetBrainsMono Nerd Font Mono (v3.5.1, SHA-256)
   --frosted-glass    Instala/configura desfoque no GNOME da sessão atual
+  -i, --interactive  Pergunta o que instalar (menu no terminal; lê a entrada padrão)
+  --no-COMPONENTE    Omite um componente: bash, zsh, tmux, helix, starship ou visual
+  --visual           Força o visual (Alacritty, Ayu no Neovim, scripts terminal-*)
+                     --no-tmux mantém tmux-theme e temas se o visual estiver ligado
   --theme NOME       Tema inicial; mantém a escolha existente quando omitido
   --target CAMINHO   Home de destino (isolado dos XDG_* da conta atual)
   -h, --help         Mostra esta ajuda
@@ -45,6 +55,11 @@ while (($#)); do
         --shell-tools) shell_tools=1 ;;
         --font) font=1 ;;
         --frosted-glass) frosted_glass=1 ;;
+        --visual) use[visual]=on ;;
+        -i|--interactive) interactive=1 ;;
+        --no-*)
+            is_component "${1#--no-}" || fail "Componente desconhecido: ${1#--no-} (use: ${components[*]})"
+            use[${1#--no-}]=off ;;
         --theme|--target)
             (($# >= 2)) || fail "Falta valor para $1"
             if [[ $1 == --theme ]]; then selected_theme=$2
@@ -71,6 +86,78 @@ else
     data_dir=${XDG_DATA_HOME:-$target_home/.local/share}
 fi
 bin_dir=$target_home/.local/bin
+# O Omarchy troca cores de terminal, Neovim e desktop pelo próprio sistema de
+# temas; o visual dos dotfiles só entra onde ele não existe.
+if [[ ${use[visual]} == auto ]]; then
+    use[visual]=on
+    if (( ! target_explicit )) && { command -v omarchy-theme-set >/dev/null || [[ -d $config_dir/omarchy ]]; }; then
+        use[visual]=off
+    fi
+fi
+run_menu() {
+    local -a items=("${components[@]}" packages shell-tools font frosted-glass)
+    local -a texts=(
+        'Bash: .bashrc'
+        'Zsh: .zshrc, aliases, Oh My Zsh, zoxide e fzf'
+        'Tmux: .tmux.conf, atalhos, barra e cheatsheet'
+        'Helix: editor com LSP e formatters'
+        'Starship: prompt'
+        'Visual: Alacritty, Ayu no Neovim e scripts terminal-*'
+        'Instalar pacotes do sistema (pede sudo)'
+        'Instalar Oh My Zsh e plugins'
+        'Instalar fonte JetBrainsMono Nerd Font'
+        'Vidro fosco no GNOME'
+    )
+    local -A sel=()
+    local i item answer token theme_names
+    local -a themes=()
+    for item in "${components[@]}"; do [[ ${use[$item]} == on ]] && sel[$item]=1 || sel[$item]=0; done
+    sel[packages]=$packages; sel[shell-tools]=$shell_tools; sel[font]=$font; sel[frosted-glass]=$frosted_glass
+    while :; do
+        printf '\nO que instalar:\n'
+        for i in "${!items[@]}"; do
+            printf '  %2d) [%s] %s\n' $((i + 1)) "$( ((sel[${items[i]}])) && echo x || echo ' ')" "${texts[i]}"
+        done
+        printf 'Números alternam (ex.: 2 3); a = todos, n = nenhum, Enter = continuar, q = sair: '
+        IFS= read -r answer || fail 'Entrada encerrada; nada foi instalado.'
+        case $answer in
+            '') break ;;
+            q|Q) printf 'Cancelado.\n'; exit 0 ;;
+            a|A) for item in "${items[@]}"; do sel[$item]=1; done ;;
+            n|N) for item in "${items[@]}"; do sel[$item]=0; done ;;
+            *)
+                for token in $answer; do
+                    if [[ $token =~ ^[0-9]+$ ]] && ((token >= 1 && token <= ${#items[@]})); then
+                        item=${items[token-1]}; sel[$item]=$((1 - sel[$item]))
+                    else
+                        printf 'Ignorado: %s\n' "$token"
+                    fi
+                done ;;
+        esac
+    done
+    for item in "${components[@]}"; do ((sel[$item])) && use[$item]=on || use[$item]=off; done
+    packages=${sel[packages]}; shell_tools=${sel[shell-tools]}; font=${sel[font]}; frosted_glass=${sel[frosted-glass]}
+    if ((frosted_glass)) && [[ ${use[visual]} != on ]]; then
+        printf 'Vidro fosco exige o visual; ativando o visual.\n'; use[visual]=on
+    fi
+    if [[ -z $selected_theme && ( ${use[tmux]} == on || ${use[visual]} == on ) ]]; then
+        for item in "$repo_dir"/home/.config/tmux/themes/*.theme; do item=${item##*/}; themes+=("${item%.theme}"); done
+        printf '\nTemas disponíveis: auto %s\n' "${themes[*]}"
+        printf 'Tema inicial (Enter = manter o padrão): '
+        IFS= read -r answer || fail 'Entrada encerrada; nada foi instalado.'
+        selected_theme=$answer
+    fi
+    printf '\nResumo:'
+    for item in "${items[@]}"; do ((sel[$item])) && printf ' %s' "$item"; done
+    printf '\n'
+    printf 'Continuar? [S/n] '
+    IFS= read -r answer || fail 'Entrada encerrada; nada foi instalado.'
+    [[ ! $answer =~ ^[nN] ]] || { printf 'Cancelado.\n'; exit 0; }
+}
+(( ! interactive )) || run_menu
+visual=${use[visual]}
+tmux=${use[tmux]}
+[[ $visual == on ]] || (( ! frosted_glass )) || fail '--frosted-glass requer o visual; remova --no-visual.'
 for directory in "$config_dir" "$state_dir" "$data_dir"; do
     [[ $directory == /* ]] || fail 'XDG_CONFIG_HOME, XDG_STATE_HOME e XDG_DATA_HOME devem ser absolutos.'
 done
@@ -106,27 +193,46 @@ check_parents() {
 }
 declare -a sources=() destinations=() labels=()
 add() { sources+=("$1"); destinations+=("$2"); labels+=("$3"); }
-for name in .bashrc .zshrc .tmux.conf .tmux-cheatsheet.txt; do
-    add "home/$name" "$target_home/$name" "home/$name"
+for name in bash zsh; do
+    [[ ${use[$name]} == on ]] || continue
+    add "home/.${name}rc" "$target_home/.${name}rc" "home/.${name}rc"
 done
-for name in alacritty helix tmux/themes starship.toml; do
-    add "home/.config/$name" "$config_dir/$name" "config/$name"
-done
-# Overlay visual do LazyVim: nunca substituir a configuração nvim inteira.
-for name in colors/ayu-dark.lua lua/dotfiles/ayu.lua lua/plugins/visual.lua; do
-    add "home/.config/nvim/$name" "$config_dir/nvim/$name" "config/nvim/$name"
-done
+if [[ $tmux == on ]]; then
+    for name in .tmux.conf .tmux-cheatsheet.txt; do
+        add "home/$name" "$target_home/$name" "home/$name"
+    done
+fi
+[[ ${use[helix]} != on ]] || add home/.config/helix "$config_dir/helix" config/helix
+[[ ${use[starship]} != on ]] || add home/.config/starship.toml "$config_dir/starship.toml" config/starship.toml
+# terminal-theme (visual) usa tmux-theme e seus temas, mesmo sem configurar o tmux.
+if [[ $tmux == on || $visual == on ]]; then
+    add home/.config/tmux/themes "$config_dir/tmux/themes" config/tmux/themes
+fi
+if [[ $visual == on ]]; then
+    add home/.config/alacritty "$config_dir/alacritty" config/alacritty
+    # Overlay visual do LazyVim: nunca substituir a configuração nvim inteira.
+    for name in colors/ayu-dark.lua lua/dotfiles/ayu.lua lua/plugins/visual.lua; do
+        add "home/.config/nvim/$name" "$config_dir/nvim/$name" "config/nvim/$name"
+    done
+fi
 for source in "$repo_dir/home/.local/bin/"*; do
     [[ -f $source ]] || continue
     name=${source##*/}
+    # Scripts de janela/terminal pertencem ao visual (terminal-theme, -opacity, ...).
+    [[ $visual == on || $name != terminal-* ]] || continue
+    case $name in
+        tmux-theme) [[ $tmux == on || $visual == on ]] || continue ;;
+        dotfiles-editor) [[ ${use[helix]} == on ]] || continue ;;
+        tmux-*) [[ $tmux == on ]] || continue ;;
+    esac
     add "home/.local/bin/$name" "$bin_dir/$name" "home/.local/bin/$name"
 done
-add theme-choice "$state_dir/tmux/theme" state/tmux/theme
+if [[ $tmux == on || $visual == on ]]; then add theme-choice "$state_dir/tmux/theme" state/tmux/theme; fi
 for destination in "${destinations[@]}"; do check_parents "$destination"; done
 backup_dir=$state_dir/dotfiles/backups/$(date +%Y%m%d-%H%M%S)-$$
 check_parents "$backup_dir/manifest.tsv"
 if (( dry_run )); then
-    printf 'SIMULAÇÃO — nenhuma alteração será realizada.\nDestino: %s\nTema: %s\n' "$target_home" "$selected_theme"
+    printf 'SIMULAÇÃO — nenhuma alteração será realizada.\nDestino: %s\nTema: %s\nVisual: %s\nTmux: %s\n' "$target_home" "$selected_theme" "$visual" "$tmux"
     for destination in "${destinations[@]}"; do printf '  instalar com backup se necessário: %s\n' "$destination"; done
     (( ! packages )) || printf '  pacotes: detectar pacman/apt-get/dnf; instalar os disponíveis via sudo\n'
     (( ! shell_tools )) || printf '  git clone: Oh My Zsh, zsh-autosuggestions, zsh-syntax-highlighting\n'
@@ -140,9 +246,11 @@ trap cleanup EXIT
 trap 'printf "Falha durante a instalação. Backups, se criados: %s\n" "$backup_dir" >&2' ERR
 cp -a -- "$repo_dir/home" "$stage/home"
 # Gera cores sem criar servidor tmux, enviar IPC ou alterar janelas abertas.
-env XDG_CONFIG_HOME="$repo_dir/home/.config" \
-    "$repo_dir/home/.local/bin/tmux-theme" --export-alacritty "$selected_theme" \
-    > "$stage/home/.config/alacritty/theme.toml"
+if [[ $visual == on ]]; then
+    env XDG_CONFIG_HOME="$repo_dir/home/.config" \
+        "$repo_dir/home/.local/bin/tmux-theme" --export-alacritty "$selected_theme" \
+        > "$stage/home/.config/alacritty/theme.toml"
+fi
 printf '%s\n' "$selected_theme" > "$stage/theme-choice"
 as_root() {
     if (( EUID == 0 )); then "$@"
@@ -153,23 +261,26 @@ install_packages() {
     local -a candidates available=()
     if command -v pacman >/dev/null; then
         # Atualização completa evita upgrades parciais em sistemas Arch.
-        as_root pacman -Syu --needed git bash zsh alacritty tmux fzf starship zoxide \
+        [[ $visual != on ]] || candidates=(alacritty)
+        [[ $tmux != on ]] || candidates+=(tmux)
+        as_root pacman -Syu --needed "${candidates[@]}" git bash zsh fzf starship zoxide \
             eza bat helix lazygit yazi wl-clipboard xclip less ripgrep fd \
             curl unzip fontconfig util-linux clang ttf-jetbrains-mono-nerd
         return
     elif command -v apt-get >/dev/null; then
         manager=apt
         as_root apt-get update
-        candidates=(git bash zsh alacritty tmux fzf starship zoxide eza bat helix lazygit yazi
+        candidates=(git bash zsh tmux fzf starship zoxide eza bat helix lazygit yazi
             wl-clipboard xclip less ripgrep fd-find curl unzip fontconfig util-linux clang clang-format)
     elif command -v dnf >/dev/null; then
         manager=dnf
-        candidates=(git bash zsh alacritty tmux fzf starship zoxide eza bat helix lazygit yazi
+        candidates=(git bash zsh tmux fzf starship zoxide eza bat helix lazygit yazi
             wl-clipboard xclip less ripgrep fd-find curl unzip fontconfig util-linux clang clang-tools-extra)
     else
         fail 'Gerenciador não suportado. Instale as dependências manualmente e execute sem --packages.'
     fi
     for package in "${candidates[@]}"; do
+        [[ $package != tmux || $tmux == on ]] || continue
         if { [[ $manager == apt ]] && apt-cache show "$package" >/dev/null 2>&1; } ||
            { [[ $manager == dnf ]] && dnf -q info "$package" >/dev/null 2>&1; }; then
             available+=("$package")
@@ -177,6 +288,7 @@ install_packages() {
             printf 'Pacote ausente nos repositórios configurados: %s (será listado na verificação final).\n' "$package" >&2
         fi
     done
+    [[ $visual != on ]] || available+=(alacritty)
     ((${#available[@]})) || fail 'Nenhum pacote encontrado nos repositórios.'
     if [[ $manager == apt ]]; then as_root apt-get install "${available[@]}"
     else as_root dnf install "${available[@]}"; fi
@@ -256,14 +368,20 @@ if (( frosted_glass )); then
         "$bin_dir/terminal-frosted-glass"
 fi
 missing=()
-for tool in zsh tmux alacritty fzf starship zoxide eza flock less; do
+for tool in fzf zoxide eza flock less; do
     command -v "$tool" >/dev/null || missing+=("$tool")
 done
 command -v bat >/dev/null || command -v batcat >/dev/null || missing+=(bat)
-command -v helix >/dev/null || command -v hx >/dev/null || missing+=(helix)
+[[ ${use[helix]} != on ]] || command -v helix >/dev/null || command -v hx >/dev/null || missing+=(helix)
+[[ $visual != on ]] || command -v alacritty >/dev/null || missing+=(alacritty)
+[[ $tmux != on ]] || command -v tmux >/dev/null || missing+=(tmux)
+[[ ${use[zsh]} != on ]] || command -v zsh >/dev/null || missing+=(zsh)
+[[ ${use[starship]} != on ]] || command -v starship >/dev/null || missing+=(starship)
 for tool in lazygit yazi clangd clang-format; do command -v "$tool" >/dev/null || missing+=("$tool"); done
 if ((${#missing[@]})); then printf 'Dependências ainda ausentes: %s\n' "${missing[*]}"; fi
 for tool in alacritty tmux fzf; do
+    [[ $tool != alacritty || $visual == on ]] || continue
+    [[ $tool != tmux || $tmux == on ]] || continue
     minimum=0.14; flag=--version
     [[ $tool != tmux ]] || { minimum=3.3; flag=-V; }
     [[ $tool != fzf ]] || minimum=0.48
@@ -277,6 +395,10 @@ for tool in alacritty tmux fzf; do
         fi
     fi
 done
-printf 'Abra um novo terminal. Atalho dos temas: Ctrl+Shift+T no Alacritty.\n'
-printf 'Opacidade: Ctrl+Shift+O. Preferência da barra de título: Ctrl+Shift+D (vale na próxima abertura).\n'
+if [[ $visual == on ]]; then
+    printf 'Abra um novo terminal. Atalho dos temas: Ctrl+Shift+T no Alacritty.\n'
+    printf 'Opacidade: Ctrl+Shift+O. Preferência da barra de título: Ctrl+Shift+D (vale na próxima abertura).\n'
+else
+    printf 'Visual omitido (Omarchy ou --no-visual); use --visual para instalá-lo.\n'
+fi
 printf 'Para usar Zsh como shell de login, altere-o nas preferências da sua conta.\n'
