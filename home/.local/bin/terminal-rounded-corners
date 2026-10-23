@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# Cantos de 12 px apenas no Alacritty; execute na sessão GNOME, sem sudo.
+set -euo pipefail
+uuid=rounded-window-corners@fxgn
+schema=org.gnome.shell.extensions.rounded-window-corners-reborn
+path=/org/gnome/shell/extensions/rounded-window-corners-reborn/
+for tool in python3 gnome-shell gnome-extensions gsettings gdbus dconf glib-compile-schemas; do
+    command -v "$tool" >/dev/null || { echo "Instale $tool antes de continuar." >&2; exit 1; }
+done
+gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell \
+    --method org.freedesktop.DBus.Peer.Ping >/dev/null || {
+    echo 'Execute no terminal da sua sessão GNOME, sem sudo.' >&2; exit 1;
+}
+extension=${XDG_DATA_HOME:-$HOME/.local/share}/gnome-shell/extensions/$uuid
+export ROUNDED_EXTENSION_UUID=$uuid ROUNDED_EXTENSION_PATH=$extension
+python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import tempfile
+import urllib.parse
+import urllib.request
+import zipfile
+
+uuid = os.environ['ROUNDED_EXTENSION_UUID']
+extension = Path(os.environ['ROUNDED_EXTENSION_PATH'])
+version = re.search(r'\d+', subprocess.check_output(['gnome-shell', '--version'], text=True)).group()
+if not extension.exists():
+    query = urllib.parse.urlencode({'uuid': uuid, 'shell_version': version})
+    with urllib.request.urlopen('https://extensions.gnome.org/extension-info/?' + query, timeout=30) as response:
+        info = json.load(response)
+    if not info.get('download_url'):
+        raise SystemExit(f'Nenhum pacote oficial compatível com GNOME {version}.')
+    url = urllib.parse.urljoin('https://extensions.gnome.org', info['download_url'])
+    if urllib.parse.urlparse(url).scheme != 'https' or urllib.parse.urlparse(url).hostname != 'extensions.gnome.org':
+        raise SystemExit('URL fora do catálogo oficial do GNOME.')
+    with tempfile.TemporaryDirectory(prefix='rounded-corners-') as directory:
+        archive = Path(directory) / 'extension.zip'
+        with urllib.request.urlopen(url, timeout=30) as response:
+            archive.write_bytes(response.read(20 * 1024 * 1024))
+        with zipfile.ZipFile(archive) as bundle:
+            metadata = json.loads(bundle.read('metadata.json'))
+        if metadata.get('uuid') != uuid or version not in metadata.get('shell-version', []):
+            raise SystemExit('Pacote incompatível com a sessão GNOME.')
+        subprocess.run(['gnome-extensions', 'install', str(archive)], check=True)
+metadata = json.loads((extension / 'metadata.json').read_text())
+if metadata.get('uuid') != uuid or version not in metadata.get('shell-version', []):
+    raise SystemExit('Atualize a extensão para a versão do GNOME atual.')
+PY
+schemas=$extension/schemas
+[[ -f $schemas/gschemas.compiled ]] || glib-compile-schemas "$schemas"
+backup=${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/backups/$(date +%Y%m%d-%H%M%S)-rounded-corners-$$
+mkdir -m 700 -p "$backup"
+dconf dump "$path" > "$backup/rounded-corners.dconf"
+echo "Backup: $backup/rounded-corners.dconf"
+set_value() {
+    gsettings --schemadir "$schemas" set "$schema" "$1" "$2"
+    # gsettings pode retornar sucesso mesmo quando o dconf recusa a gravação.
+    local actual expected
+    actual=$(gsettings --schemadir "$schemas" get "$schema" "$1")
+    expected=$2
+    [[ $actual == "$expected" ]] || {
+        echo "GNOME não confirmou a gravação de $1: $actual" >&2; exit 1;
+    }
+}
+# A extensão usa a lista de exceções como lista de permissão neste modo.
+set_value whitelist true
+set_value blacklist "['Alacritty', 'alacritty', 'org.alacritty.Alacritty']"
+# Evita que a migração inicial substitua o raio escolhido.
+set_value settings-version 'uint32 9'
+corners="{'padding': <{'left': <uint32 0>, 'right': <uint32 0>, 'top': <uint32 0>, 'bottom': <uint32 0>}>, 'keepRoundedCorners': <{'maximized': <false>, 'fullscreen': <false>}>, 'borderRadius': <uint32 12>, 'smoothing': <0.0>, 'borderColor': <(0.5, 0.5, 0.5, 1.0)>, 'enabled': <true>}"
+gsettings --schemadir "$schemas" set "$schema" global-rounded-corner-settings "$corners"
+gsettings --schemadir "$schemas" get "$schema" global-rounded-corner-settings | \
+    python3 -c 'import sys; s=sys.stdin.read(); sys.exit(0 if "\x27borderRadius\x27: <uint32 12>" in s else "GNOME não confirmou o raio de 12 px.")'
+if gnome-extensions enable "$uuid"; then
+    echo 'Configuração salva: cantos de 12 px apenas no Alacritty.'
+    gnome-extensions info "$uuid"
+else
+    echo 'Configuração salva. Saia e entre na sessão GNOME e execute este comando novamente.'
+    exit 1
+fi
