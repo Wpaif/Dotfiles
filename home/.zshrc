@@ -30,20 +30,15 @@ if command -v eza >/dev/null 2>&1; then
     alias tree='eza --tree --icons'
 fi
 if command -v bat >/dev/null 2>&1; then
-    alias bat='bat --style=auto --paging=always'
+    alias bat='bat --style=auto --paging=auto'
 elif command -v batcat >/dev/null 2>&1; then
-    alias bat='batcat --style=auto --paging=always'
+    alias bat='batcat --style=auto --paging=auto'
 fi
 alias grep='grep --color=auto'
 command -v lsblk >/dev/null 2>&1 && alias lsblk='lsblk -o NAME,SIZE,MOUNTPOINT,TYPE,FSTYPE,RM,RO,LABEL,UUID'
 command -v nvim >/dev/null 2>&1 && alias lvim='nvim'
 alias ..='cd ..'
 alias ...='cd ../..'
-
-# Integração pessoal opcional: exporte TRANSLATE_CLI_SCRIPT com o caminho.
-if [[ -n ${TRANSLATE_CLI_SCRIPT:-} && -r $TRANSLATE_CLI_SCRIPT ]]; then
-    t() { ruby "$TRANSLATE_CLI_SCRIPT" "$@"; }
-fi
 
 vdo_audio() {
     command -v pw-loopback >/dev/null 2>&1 || {

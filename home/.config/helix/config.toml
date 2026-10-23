@@ -1,7 +1,16 @@
 theme = "hackthebox"
 
 [editor]
+auto-completion = true
+completion-trigger-len = 1
+completion-timeout = 100
+auto-info = true
 auto-format = true
+
+[editor.lsp]
+enable = true
+auto-signature-help = true
+snippets = true
 
 [editor.cursor-shape]
 normal = "block"

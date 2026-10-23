@@ -4,3 +4,9 @@ file-types = ["c", "h"]
 language-servers = ["clangd"]
 formatter = { command = "clang-format" }
 auto-format = true
+
+[[language]]
+name = "rust"
+language-servers = ["rust-analyzer"]
+formatter = { command = "rustfmt" }
+auto-format = true
